@@ -24,6 +24,7 @@ from langgraph.store.base import BaseStore
 
 from whatsapp_langchain.agents.middleware import (
     create_greeting_middleware,
+    create_stale_history_filter,
     get_context_middleware,
 )
 from whatsapp_langchain.agents.tools import (
@@ -43,6 +44,11 @@ from .prompts import SYSTEM_PROMPT
 
 # Como a atendente se apresenta na primeira mensagem (ver middleware de saudação).
 GREETING_INTRO = "Aqui quem fala é a Juliana, atendente virtual da Patricia Berberich"
+
+# Trechos de respostas antigas (de quando o agente era de uma clínica) que ainda
+# estão no histórico salvo das conversas. São escondidos do modelo para ele não
+# imitar a persona errada.
+STALE_REPLY_MARKERS = ("Dra. Luana Lima",)
 
 
 def build_graph(
@@ -78,10 +84,12 @@ def build_graph(
     # Modelo principal com rate limiter centralizado (shared/llm.py)
     model = create_chat_model()
 
-    # Middleware de contexto baseado em CONTEXT_STRATEGY, mais a saudação
-    # dinâmica (bom dia/tarde/noite) recalculada a cada chamada ao modelo
+    # Middleware de contexto baseado em CONTEXT_STRATEGY, o filtro de respostas
+    # antigas do histórico e a saudação dinâmica (bom dia/tarde/noite, primeira
+    # mensagem x cliente que voltou) recalculada a cada chamada ao modelo
     middleware = [
         *get_context_middleware(),
+        create_stale_history_filter(STALE_REPLY_MARKERS),
         create_greeting_middleware(SYSTEM_PROMPT, GREETING_INTRO),
     ]
 

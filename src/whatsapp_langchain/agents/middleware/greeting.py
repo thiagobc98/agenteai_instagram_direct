@@ -8,6 +8,14 @@ ficaria congelado nesse instante sem este middleware. O decorator
 ao modelo, então o horário (fuso ``BUSINESS_TIMEZONE``) fica sempre
 correto.
 
+Três situações, decididas em código (não pelo "bom senso" do modelo):
+
+1. Primeira mensagem da conversa: apresentação completa.
+2. Cliente que já conversou antes e só cumprimentou ("oi", "bom dia"...):
+   boas-vindas de volta + pergunta de como ajudar. Nunca só a saudação.
+3. Cliente que já conversou antes e escreveu outra coisa: responde ao
+   pedido, sem repetir a apresentação.
+
 Exemplo:
     from whatsapp_langchain.agents.middleware import create_greeting_middleware
 
@@ -15,6 +23,8 @@ Exemplo:
     agent = create_agent(model=model, middleware=[greeting], ...)
 """
 
+import re
+import unicodedata
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -22,6 +32,34 @@ from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.messages import HumanMessage
 
 from whatsapp_langchain.shared.config import settings
+
+# Trechos que compõem um cumprimento (já sem acento e em minúsculas). Se depois
+# de removê-los não sobrar nada, a mensagem é só um cumprimento.
+_GREETING_PATTERNS = [
+    r"o+i+e*",
+    r"ola+",
+    r"opa+",
+    r"e+ ?a+i+",
+    r"hey",
+    r"hello",
+    r"salve",
+    r"bom ?dia",
+    r"boa ?tarde",
+    r"boa ?noite",
+    r"tudo (bem|bom|certo|joia)",
+    r"td (bem|bom)",
+    r"como (vai|esta|voce esta|voce vai|vc esta|vc ta|ta)",
+    r"beleza",
+    r"blz",
+    r"gente",
+    r"pessoal",
+    r"querida",
+    r"amiga",
+    r"moca",
+    r"vcs?",
+    r"voces?",
+]
+_GREETING_RE = re.compile(r"\b(?:" + "|".join(_GREETING_PATTERNS) + r")\b")
 
 
 def _greeting_word(hour: int) -> str:
@@ -32,12 +70,53 @@ def _greeting_word(hour: int) -> str:
     return "Boa noite"
 
 
+def is_greeting_only(text: str) -> bool:
+    """True se a mensagem é apenas um cumprimento (sem pergunta nem pedido).
+
+    "Oi", "Bom dia!", "Olá, tudo bem? 😊" -> True.
+    "Oi, quanto custa?", "Quem tá falando?" -> False.
+    Mensagem vazia ou só com emoji -> False (não dá para saber a intenção).
+    """
+    plain = unicodedata.normalize("NFKD", text.lower())
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    plain = re.sub(r"[^a-z\s]", " ", plain)
+    plain = re.sub(r"\s+", " ", plain).strip()
+    if not plain:
+        return False
+    return not _GREETING_RE.sub(" ", plain).strip()
+
+
+def _last_human_text(messages: list) -> str:
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            content = message.content
+            if isinstance(content, str):
+                return content
+            return " ".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in content
+            )
+    return ""
+
+
 def build_greeting_prompt(
-    system_prompt: str, intro: str, now: datetime, is_first_turn: bool
+    system_prompt: str,
+    intro: str,
+    now: datetime,
+    *,
+    is_first_turn: bool,
+    last_message: str = "",
 ) -> str:
     """Monta o system prompt final com as instruções de saudação.
 
     Função pura (sem acesso a relógio ou estado do agente) para ser testável.
+
+    Args:
+        system_prompt: Prompt base do agente.
+        intro: Apresentação da primeira mensagem (sem saudação nem pontuação).
+        now: Data/hora local da loja.
+        is_first_turn: True se é a primeira mensagem da cliente na conversa.
+        last_message: Texto da mensagem que está sendo respondida.
     """
     greeting = _greeting_word(now.hour)
 
@@ -49,11 +128,23 @@ def build_greeting_prompt(
             "já souber que é um homem. Não use nenhuma outra saudação "
             '(como "Olá") nesta primeira mensagem.'
         )
+    elif is_greeting_only(last_message):
+        instruction = (
+            "Esta cliente JÁ conversou com você antes e agora só cumprimentou. "
+            "NUNCA responda apenas com a saudação. Dê boas-vindas de volta e "
+            "pergunte como pode ajudar, respondendo exatamente: "
+            f'"{greeting}! Que bom falar com você de novo, seja bem-vinda '
+            'novamente 😊 Como posso te ajudar hoje?" — troque "bem-vinda" '
+            'por "bem-vindo" apenas se já souber que é um homem. Se já souber '
+            "o nome dela (pela memória), pode incluí-lo logo após a saudação. "
+            'Não repita a apresentação completa e não use "Olá".'
+        )
     else:
         instruction = (
-            f'Se a cliente cumprimentar novamente (ex: "oi", "bom dia") '
-            f'no meio da conversa, responda ao cumprimento com "{greeting}!" '
-            "sem repetir a apresentação completa (você já se apresentou)."
+            "Esta cliente já conversou com você antes: não repita a "
+            "apresentação. Responda direto ao que ela pediu. Se a mensagem "
+            f'começar com um cumprimento, comece com "{greeting}!" e já '
+            "atenda o pedido na mesma resposta."
         )
 
     return (
@@ -83,7 +174,13 @@ def create_greeting_middleware(system_prompt: str, intro: str):
     def inject_greeting(request: ModelRequest) -> str:
         now = datetime.now(ZoneInfo(settings.business_timezone))
         messages = request.state.get("messages", [])
-        is_first_turn = sum(1 for m in messages if isinstance(m, HumanMessage)) <= 1
-        return build_greeting_prompt(system_prompt, intro, now, is_first_turn)
+        human_count = sum(1 for m in messages if isinstance(m, HumanMessage))
+        return build_greeting_prompt(
+            system_prompt,
+            intro,
+            now,
+            is_first_turn=human_count <= 1,
+            last_message=_last_human_text(messages),
+        )
 
     return inject_greeting
