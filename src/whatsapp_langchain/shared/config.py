@@ -40,17 +40,25 @@ class Settings(BaseSettings):
     log_level: str = "info"
     log_json: bool = False  # True em prod para logs estruturados
 
-    # --- Evolution API (WhatsApp) ---
-    # URL base da instância Evolution API na sua VPS (ex: https://evo.seudominio.com)
-    evolution_base_url: str = ""
-    # apikey da instância (Settings -> API Key no manager, ou definida na criação)
-    evolution_api_key: str = ""
-    # Nome da instância conectada ao WhatsApp
-    evolution_instance: str = ""
-    # Token secreto próprio (não vem do Evolution) usado para validar que o
-    # POST em /webhook/evolution/{token} realmente veio da sua instância —
-    # o Evolution não assina os webhooks como o Twilio faz.
-    evolution_webhook_token: str = ""
+    # --- Instagram Direct (Instagram Messaging API) ---
+    # Veja docs/INSTAGRAM_API.md para o passo a passo completo.
+    # Token de acesso usado no envio (Instagram User access token no fluxo
+    # "Instagram Login"; Page Access Token no fluxo "Facebook Login").
+    instagram_access_token: SecretStr | None = None
+    # App Secret do app Meta — usado para validar a assinatura
+    # X-Hub-Signature-256 dos webhooks (HMAC-SHA256 do body bruto).
+    instagram_app_secret: SecretStr | None = None
+    # Token próprio (você inventa) informado no painel da Meta ao cadastrar o
+    # webhook — a Meta o devolve no GET de verificação (hub.verify_token).
+    instagram_verify_token: SecretStr | None = None
+    # ID da conta profissional do Instagram. Opcional: se preenchido, eventos
+    # cujo remetente é a própria conta são descartados (evita loop).
+    instagram_business_account_id: str = ""
+    # Versão da Graph API usada nas chamadas de envio.
+    instagram_graph_api_version: str = "v25.0"
+    # Host da Graph API: graph.instagram.com (Instagram Login, padrão) ou
+    # graph.facebook.com (Facebook Login com Página vinculada).
+    instagram_graph_base_url: str = "https://graph.instagram.com"
 
     # --- Rate Limit ---
     rate_limit_per_hour: int = 30
@@ -133,9 +141,10 @@ class Settings(BaseSettings):
     appointment_duration_minutes: int = 30
 
     # --- Notificações proativas (fora do ciclo normal de webhook) ---
-    # WhatsApp da médica (E.164) para receber a agenda do dia seguinte a
-    # cada agendamento/remarcação/cancelamento. Vazio desabilita o aviso.
-    doctor_whatsapp_number: str = ""
+    # ID Instagram (IGSID) da médica para receber a agenda do dia seguinte.
+    # Vazio desabilita o aviso. Só é entregue dentro da janela de 24h após a
+    # última mensagem que ela enviou à conta (ver docs/INSTAGRAM_API.md).
+    doctor_instagram_id: str = ""
     # Hora (0-23, fuso business_timezone) em que os pacientes com consulta
     # no dia seguinte recebem o lembrete de confirmação.
     patient_reminder_hour: int = 9

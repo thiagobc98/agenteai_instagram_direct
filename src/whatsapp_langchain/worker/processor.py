@@ -1,11 +1,11 @@
-"""Processador de mensagens — orquestra agente, typing e envio Evolution API.
+"""Processador de mensagens — orquestra agente, typing e envio Instagram Direct.
 
 Responsável por:
 1. Pré-processar entrada (mídia -> texto)
 2. Enviar typing indicator (best-effort)
 3. Carregar o agente via loader (com checkpointer PostgreSQL)
 4. Executar o agente
-5. Enviar resposta ao usuário via Evolution API
+5. Enviar resposta ao usuário via Instagram Messaging API
 6. Salvar no banco (mark_done somente após envio confirmado)
 
 Decisões arquiteturais (Fase 3):
@@ -22,7 +22,7 @@ Uso:
         message, pool,
         checkpointer=checkpointer,
         store=store,
-        evolution=evolution,
+        instagram=instagram,
     )
 """
 
@@ -39,7 +39,7 @@ from whatsapp_langchain.shared.queue import (
     mark_failed,
     upsert_conversation,
 )
-from whatsapp_langchain.worker.evolution_client import EvolutionClient
+from whatsapp_langchain.worker.instagram_client import InstagramClient
 from whatsapp_langchain.worker.media import (
     AUTO_RESPONSE_MEDIA_FAILURE,
     preprocess_incoming_message,
@@ -54,13 +54,13 @@ async def process_message(
     *,
     checkpointer: BaseCheckpointSaver,
     store: BaseStore | None = None,
-    evolution: EvolutionClient,
+    instagram: InstagramClient,
 ) -> None:
     """Processa uma mensagem da fila com o agente apropriado.
 
-    Decodifica mídia base64 se presente, envia typing, carrega o grafo
+    Baixa/decodifica mídia se presente, envia typing, carrega o grafo
     do agente com checkpointer PostgreSQL, executa, envia a resposta
-    via Evolution API e salva no banco.
+    via Instagram Messaging API e salva no banco.
 
     Envio confirmado é obrigatório — nenhum mark_done ocorre sem isso.
 
@@ -69,12 +69,12 @@ async def process_message(
         pool: Pool de conexões do psycopg.
         checkpointer: Checkpointer LangGraph já inicializado no boot.
         store: Store LangGraph compartilhado (None se memória desabilitada).
-        evolution: Cliente Evolution API para envio (obrigatório).
+        instagram: Cliente Instagram Messaging API para envio (obrigatório).
     """
     logger.info(
         "processing_message",
         message_id=message.id,
-        phone=message.phone_number,
+        external_id=message.external_id,
         agent_id=message.agent_id,
         attempt=message.attempts,
     )
@@ -85,6 +85,7 @@ async def process_message(
             body=message.incoming_message,
             media_base64=message.media_base64,
             media_type=message.media_type,
+            media_url=message.media_url,
         )
 
         # Se mídia está desabilitada ou falhou, não chama o agente
@@ -92,7 +93,7 @@ async def process_message(
             auto_response = pre.auto_response or AUTO_RESPONSE_MEDIA_FAILURE
 
             # Enviar auto-response antes de marcar como done
-            await evolution.send_message(message.phone_number, auto_response)
+            await instagram.send_message(message.external_id, auto_response)
 
             await mark_done(
                 pool,
@@ -104,27 +105,29 @@ async def process_message(
             )
             await upsert_conversation(
                 pool,
-                phone_number=message.phone_number,
+                external_id=message.external_id,
                 agent_id=message.agent_id,
                 last_message=auto_response,
             )
             logger.info(
                 "message_auto_responded",
                 message_id=message.id,
-                phone=message.phone_number,
+                external_id=message.external_id,
                 agent_id=message.agent_id,
                 media_status=pre.media_processing_status,
             )
             return
 
-        # 2. Typing indicator (best-effort, falha não interrompe processamento)
+        # 2. Marca como visto + typing indicator (best-effort, falha não
+        # interrompe processamento)
         try:
-            await evolution.send_typing(message.phone_number)
+            await instagram.mark_seen(message.external_id)
+            await instagram.send_typing(message.external_id)
         except Exception as typing_err:
             logger.warning(
                 "typing_failed",
                 message_id=message.id,
-                phone=message.phone_number,
+                external_id=message.external_id,
                 error=str(typing_err),
             )
 
@@ -135,7 +138,7 @@ async def process_message(
         invoke_config = {
             "configurable": {
                 "thread_id": message.thread_id,
-                "user_id": message.phone_number,
+                "user_id": message.external_id,
             }
         }
 
@@ -152,8 +155,8 @@ async def process_message(
         # 4. Extrair resposta
         response_text = result["messages"][-1].content
 
-        # 5. Enviar resposta via Evolution API (obrigatório antes de mark_done)
-        await evolution.send_message(message.phone_number, response_text)
+        # 5. Enviar resposta via Instagram (obrigatório antes de mark_done)
+        await instagram.send_message(message.external_id, response_text)
 
         # 6. mark_done somente após envio confirmado
         await mark_done(
@@ -166,7 +169,7 @@ async def process_message(
         )
         await upsert_conversation(
             pool,
-            phone_number=message.phone_number,
+            external_id=message.external_id,
             agent_id=message.agent_id,
             last_message=response_text,
         )
@@ -174,7 +177,7 @@ async def process_message(
         logger.info(
             "message_processed",
             message_id=message.id,
-            phone=message.phone_number,
+            external_id=message.external_id,
             agent_id=message.agent_id,
             response_length=len(response_text),
         )
@@ -183,7 +186,7 @@ async def process_message(
         logger.error(
             "message_processing_error",
             message_id=message.id,
-            phone=message.phone_number,
+            external_id=message.external_id,
             agent_id=message.agent_id,
             error=str(e),
         )

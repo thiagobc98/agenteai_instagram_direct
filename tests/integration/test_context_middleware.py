@@ -253,7 +253,7 @@ class TestSummarizeMiddleware:
                 id="a1",
             ),
             HumanMessage(
-                content="Trabalho com LangGraph e WhatsApp.",
+                content="Trabalho com LangGraph e Instagram.",
                 id="h2",
             ),
             AIMessage(
@@ -314,7 +314,7 @@ class TestSummarizeMiddleware:
             "Meu nome é Carlos, moro em São Paulo.",
             "Trabalho como desenvolvedor Python há 5 anos.",
             "Estou estudando LangGraph para chatbots.",
-            "Quero integrar com WhatsApp usando Twilio.",
+            "Quero integrar com Instagram usando a API da Meta.",
             "Preciso configurar middleware de contexto.",
         ]
 

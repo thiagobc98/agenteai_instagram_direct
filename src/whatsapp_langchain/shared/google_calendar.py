@@ -11,7 +11,7 @@ o event loop do worker.
 
 Uso:
     from whatsapp_langchain.shared.google_calendar import (
-        create_event, update_event, delete_event, find_events_by_phone,
+        create_event, update_event, delete_event, find_events_by_external_id,
         get_busy_intervals, compute_free_slots,
     )
 """
@@ -81,7 +81,7 @@ def _event_body(
     description: str,
     start: datetime,
     end: datetime,
-    phone: str,
+    external_id: str,
     patient_name: str,
 ) -> dict[str, Any]:
     tz = settings.business_timezone
@@ -91,7 +91,10 @@ def _event_body(
         "start": {"dateTime": start.isoformat(), "timeZone": tz},
         "end": {"dateTime": end.isoformat(), "timeZone": tz},
         "extendedProperties": {
-            "private": {"phone": phone, "patient_name": patient_name}
+            "private": {
+                "external_id": external_id,
+                "patient_name": patient_name,
+            }
         },
     }
 
@@ -159,7 +162,7 @@ async def create_event(
     description: str,
     start: datetime,
     end: datetime,
-    phone: str,
+    external_id: str,
     patient_name: str,
 ) -> dict[str, Any]:
     """Cria um evento na agenda e retorna o evento criado (com `id`)."""
@@ -168,7 +171,7 @@ async def create_event(
         description=description,
         start=start,
         end=end,
-        phone=phone,
+        external_id=external_id,
         patient_name=patient_name,
     )
 
@@ -178,7 +181,9 @@ async def create_event(
 
     async with _CALENDAR_LOCK:
         event = await asyncio.to_thread(_call)
-    logger.info("calendar_event_created", event_id=event.get("id"), phone=phone)
+    logger.info(
+        "calendar_event_created", event_id=event.get("id"), external_id=external_id
+    )
     return event
 
 
@@ -246,10 +251,10 @@ async def list_events(time_min: datetime, time_max: datetime) -> list[dict[str, 
     ]
 
 
-async def find_events_by_phone(
-    phone: str, *, time_min: datetime | None = None
+async def find_events_by_external_id(
+    external_id: str, *, time_min: datetime | None = None
 ) -> list[dict[str, Any]]:
-    """Lista os próximos eventos futuros marcados com o telefone informado."""
+    """Lista os próximos eventos futuros marcados com o ID Instagram informado."""
     time_min = time_min or datetime.now().astimezone()
 
     def _call() -> dict:
@@ -258,7 +263,7 @@ async def find_events_by_phone(
             service.events()
             .list(
                 calendarId=_calendar_id(),
-                privateExtendedProperty=f"phone={phone}",
+                privateExtendedProperty=f"external_id={external_id}",
                 timeMin=time_min.isoformat(),
                 singleEvents=True,
                 orderBy="startTime",

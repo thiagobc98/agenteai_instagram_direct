@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from whatsapp_langchain.shared.models import MessageQueue
-from whatsapp_langchain.worker.evolution_client import EvolutionSendError
+from whatsapp_langchain.worker.instagram_client import InstagramSendError
 from whatsapp_langchain.worker.media import MediaPreprocessResult
 
 # --- Fixtures ---
@@ -24,9 +24,9 @@ def message():
     return MessageQueue(
         id=1,
         message_id="MSG123",
-        phone_number="+5511999999999",
+        external_id="17841400000000001",
         agent_id="secretaria",
-        thread_id="+5511999999999:secretaria",
+        thread_id="17841400000000001:secretaria",
         incoming_message="Olá!",
     )
 
@@ -37,9 +37,9 @@ def media_message():
     return MessageQueue(
         id=2,
         message_id="MSG456",
-        phone_number="+5511999999999",
+        external_id="17841400000000001",
         agent_id="secretaria",
-        thread_id="+5511999999999:secretaria",
+        thread_id="17841400000000001:secretaria",
         incoming_message="",
         media_base64="aGVsbG8=",
         media_type="image/jpeg",
@@ -47,12 +47,13 @@ def media_message():
 
 
 @pytest.fixture
-def mock_evolution():
-    """EvolutionClient mock com send_message e send_typing."""
-    evolution = AsyncMock()
-    evolution.send_typing = AsyncMock(return_value=True)
-    evolution.send_message = AsyncMock(return_value="MSG_RESPONSE_123")
-    return evolution
+def mock_instagram():
+    """InstagramClient mock com send_message, send_typing e mark_seen."""
+    instagram = AsyncMock()
+    instagram.send_typing = AsyncMock(return_value=True)
+    instagram.mark_seen = AsyncMock(return_value=True)
+    instagram.send_message = AsyncMock(return_value="MSG_RESPONSE_123")
+    return instagram
 
 
 # --- Helpers ---
@@ -102,7 +103,7 @@ MEDIA_DISABLED_PREPROCESS = MediaPreprocessResult(
 class TestSendMessageMarkDone:
     """Garante que mark_done só ocorre após send_message bem-sucedido."""
 
-    async def test_mark_done_after_successful_send(self, message, mock_evolution):
+    async def test_mark_done_after_successful_send(self, message, mock_instagram):
         """Fluxo feliz: send_message ok → mark_done chamado."""
         patches = _patch_processor(TEXT_PREPROCESS)
         with (
@@ -124,22 +125,22 @@ class TestSendMessageMarkDone:
                 message,
                 AsyncMock(),
                 checkpointer=AsyncMock(),
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
             # send_message chamado com a resposta do agente
-            mock_evolution.send_message.assert_awaited_once_with(
-                "+5511999999999", "Resposta do agente"
+            mock_instagram.send_message.assert_awaited_once_with(
+                "17841400000000001", "Resposta do agente"
             )
             # mark_done chamado
             assert mock_done.await_count == 1
             # mark_failed NÃO chamado
             mock_failed.assert_not_awaited()
 
-    async def test_mark_done_not_called_when_send_fails(self, message, mock_evolution):
+    async def test_mark_done_not_called_when_send_fails(self, message, mock_instagram):
         """send_message falha → mark_done NÃO é chamado, mark_failed SIM."""
-        mock_evolution.send_message = AsyncMock(
-            side_effect=EvolutionSendError(500, "Internal Server Error")
+        mock_instagram.send_message = AsyncMock(
+            side_effect=InstagramSendError(500, "Internal Server Error")
         )
 
         patches = _patch_processor(TEXT_PREPROCESS)
@@ -162,11 +163,11 @@ class TestSendMessageMarkDone:
                 message,
                 AsyncMock(),
                 checkpointer=AsyncMock(),
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
             # send_message foi chamado (e falhou)
-            mock_evolution.send_message.assert_awaited_once()
+            mock_instagram.send_message.assert_awaited_once()
             # mark_done NÃO chamado
             mock_done.assert_not_awaited()
             # mark_failed chamado com o erro
@@ -174,9 +175,9 @@ class TestSendMessageMarkDone:
             error_arg = mock_failed.call_args[0][2]
             assert "500" in error_arg
 
-    async def test_mark_failed_on_generic_send_exception(self, message, mock_evolution):
+    async def test_mark_failed_on_generic_send_exception(self, message, mock_instagram):
         """Exceção genérica no send_message → mark_failed."""
-        mock_evolution.send_message = AsyncMock(
+        mock_instagram.send_message = AsyncMock(
             side_effect=Exception("Connection timeout")
         )
 
@@ -200,7 +201,7 @@ class TestSendMessageMarkDone:
                 message,
                 AsyncMock(),
                 checkpointer=AsyncMock(),
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
             mock_done.assert_not_awaited()
@@ -211,11 +212,11 @@ class TestSendMessageMarkDone:
 # === Testes do fluxo auto-response (mídia) ===
 
 
-class TestAutoResponseEvolution:
+class TestAutoResponseInstagram:
     """Garante que auto-response de mídia também envia antes de mark_done."""
 
-    async def test_auto_response_sends_via_evolution(
-        self, media_message, mock_evolution
+    async def test_auto_response_sends_via_instagram(
+        self, media_message, mock_instagram
     ):
         """Auto-response de mídia desabilitada envia antes de mark_done."""
         patches = _patch_processor(MEDIA_DISABLED_PREPROCESS)
@@ -232,12 +233,12 @@ class TestAutoResponseEvolution:
                 media_message,
                 AsyncMock(),
                 checkpointer=AsyncMock(),
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
-            # Auto-response enviada via Evolution
-            mock_evolution.send_message.assert_awaited_once_with(
-                "+5511999999999",
+            # Auto-response enviada via Instagram
+            mock_instagram.send_message.assert_awaited_once_with(
+                "17841400000000001",
                 "Imagens estão desabilitadas neste momento.",
             )
             # mark_done chamado após envio
@@ -245,11 +246,11 @@ class TestAutoResponseEvolution:
             mock_failed.assert_not_awaited()
 
     async def test_auto_response_mark_failed_when_send_fails(
-        self, media_message, mock_evolution
+        self, media_message, mock_instagram
     ):
         """Auto-response falha no envio → mark_failed (retry)."""
-        mock_evolution.send_message = AsyncMock(
-            side_effect=EvolutionSendError(503, "Service Unavailable")
+        mock_instagram.send_message = AsyncMock(
+            side_effect=InstagramSendError(503, "Service Unavailable")
         )
 
         patches = _patch_processor(MEDIA_DISABLED_PREPROCESS)
@@ -266,13 +267,175 @@ class TestAutoResponseEvolution:
                 media_message,
                 AsyncMock(),
                 checkpointer=AsyncMock(),
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
             # send_message foi chamado (e falhou)
-            mock_evolution.send_message.assert_awaited_once()
+            mock_instagram.send_message.assert_awaited_once()
             # mark_done NÃO chamado
             mock_done.assert_not_awaited()
             # mark_failed chamado
             mock_failed.assert_awaited_once()
             assert "503" in mock_failed.call_args[0][2]
+
+
+# === Testes específicos do canal Instagram ===
+
+
+class TestInstagramChannel:
+    """Mark-seen/typing, mídia por URL e identidade do contato."""
+
+    async def test_marks_seen_and_types_before_running_agent(
+        self, message, mock_instagram
+    ):
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        mock_instagram.mark_seen.assert_awaited_once_with("17841400000000001")
+        mock_instagram.send_typing.assert_awaited_once_with("17841400000000001")
+
+    async def test_mark_seen_failure_does_not_block_reply(
+        self, message, mock_instagram
+    ):
+        mock_instagram.mark_seen = AsyncMock(side_effect=RuntimeError("boom"))
+
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2] as mock_done,
+            patches[3] as mock_failed,
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        mock_instagram.send_message.assert_awaited_once()
+        mock_done.assert_awaited_once()
+        mock_failed.assert_not_awaited()
+
+    async def test_passes_media_url_to_preprocessing(self, mock_instagram):
+        message = MessageQueue(
+            id=3,
+            message_id="MID3",
+            external_id="17841400000000001",
+            agent_id="secretaria",
+            thread_id="17841400000000001:secretaria",
+            incoming_message="",
+            media_url="https://cdn.example.com/i.jpg",
+            media_type="image/*",
+        )
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0] as mock_preprocess,
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Ok")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        kwargs = mock_preprocess.await_args.kwargs
+        assert kwargs["media_url"] == "https://cdn.example.com/i.jpg"
+        assert kwargs["media_type"] == "image/*"
+
+    async def test_agent_runs_with_external_id_as_user_id(
+        self, message, mock_instagram
+    ):
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        config = mock_graph.ainvoke.await_args.kwargs["config"]
+        assert config["configurable"] == {
+            "thread_id": "17841400000000001:secretaria",
+            "user_id": "17841400000000001",
+        }
+
+    async def test_window_closed_send_error_goes_to_retry_flow(
+        self, message, mock_instagram
+    ):
+        mock_instagram.send_message = AsyncMock(
+            side_effect=InstagramSendError(
+                400, "outside of allowed window", code=10, subcode=2534022
+            )
+        )
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2] as mock_done,
+            patches[3] as mock_failed,
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        mock_done.assert_not_awaited()
+        mock_failed.assert_awaited_once()

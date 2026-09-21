@@ -9,9 +9,9 @@ Disponibiliza:
 - cancel_appointment: cancela a próxima consulta do paciente.
 - list_my_appointments: lista as consultas futuras do paciente.
 
-Todas resolvem o telefone do paciente via `user_id` injetado no runtime
+Todas resolvem o ID do paciente (IGSID do Instagram) via `user_id` injetado no runtime
 (ver agents/tools/_runtime.py) — o mesmo mecanismo usado pelas tools de
-memória. O paciente é identificado pelo número de WhatsApp, não por nome.
+memória. O paciente é identificado pelo ID da conta no Instagram, não por nome.
 """
 
 from datetime import datetime, timedelta
@@ -22,14 +22,14 @@ import structlog
 from googleapiclient.errors import HttpError
 from langchain_core.tools import InjectedToolArg, tool
 
-from whatsapp_langchain.agents.tools._runtime import extract_phone
+from whatsapp_langchain.agents.tools._runtime import extract_user_id
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.google_calendar import (
     GoogleCalendarNotConfiguredError,
     compute_free_slots,
     create_event,
     delete_event,
-    find_events_by_phone,
+    find_events_by_external_id,
     get_busy_intervals,
     update_event,
 )
@@ -151,7 +151,7 @@ async def book_appointment(
         time: Horário no formato HH:MM.
         notes: Observações opcionais sobre a consulta.
     """
-    phone, error = extract_phone(runtime)
+    external_id, error = extract_user_id(runtime)
     if error:
         return error
 
@@ -174,13 +174,13 @@ async def book_appointment(
             description=notes,
             start=start,
             end=end,
-            phone=phone,  # type: ignore[arg-type]
+            external_id=external_id,  # type: ignore[arg-type]
             patient_name=patient_name,
         )
     except GoogleCalendarNotConfiguredError:
         return _UNAVAILABLE_MSG
     except HttpError as exc:
-        logger.warning("calendar_book_failed", error=str(exc), phone=phone)
+        logger.warning("calendar_book_failed", error=str(exc), external_id=external_id)
         return _GENERIC_ERROR_MSG
 
     return f"Consulta agendada com sucesso! 📅 {_format_dt(start)}"
@@ -202,7 +202,7 @@ async def reschedule_appointment(
         new_date: Nova data no formato AAAA-MM-DD.
         new_time: Novo horário no formato HH:MM.
     """
-    phone, error = extract_phone(runtime)
+    external_id, error = extract_user_id(runtime)
     if error:
         return error
 
@@ -213,7 +213,7 @@ async def reschedule_appointment(
     new_end = new_start + timedelta(minutes=settings.appointment_duration_minutes)
 
     try:
-        events = await find_events_by_phone(phone)  # type: ignore[arg-type]
+        events = await find_events_by_external_id(external_id)  # type: ignore[arg-type]
         if not events:
             return "Não encontrei nenhuma consulta futura para remarcar."
 
@@ -228,7 +228,9 @@ async def reschedule_appointment(
     except GoogleCalendarNotConfiguredError:
         return _UNAVAILABLE_MSG
     except HttpError as exc:
-        logger.warning("calendar_reschedule_failed", error=str(exc), phone=phone)
+        logger.warning(
+            "calendar_reschedule_failed", error=str(exc), external_id=external_id
+        )
         return _GENERIC_ERROR_MSG
 
     return f"Consulta remarcada com sucesso para {_format_dt(new_start)}."
@@ -244,12 +246,12 @@ async def cancel_appointment(
     Sempre confirme com o paciente qual consulta ele deseja cancelar antes
     de chamar esta ferramenta.
     """
-    phone, error = extract_phone(runtime)
+    external_id, error = extract_user_id(runtime)
     if error:
         return error
 
     try:
-        events = await find_events_by_phone(phone)  # type: ignore[arg-type]
+        events = await find_events_by_external_id(external_id)  # type: ignore[arg-type]
         if not events:
             return "Não encontrei nenhuma consulta futura para cancelar."
 
@@ -258,7 +260,9 @@ async def cancel_appointment(
     except GoogleCalendarNotConfiguredError:
         return _UNAVAILABLE_MSG
     except HttpError as exc:
-        logger.warning("calendar_cancel_failed", error=str(exc), phone=phone)
+        logger.warning(
+            "calendar_cancel_failed", error=str(exc), external_id=external_id
+        )
         return _GENERIC_ERROR_MSG
 
     start_raw = target["start"].get("dateTime")
@@ -272,16 +276,16 @@ async def list_my_appointments(
     runtime: Annotated[Any, InjectedToolArg()] = None,
 ) -> str:
     """Lista as próximas consultas futuras já agendadas para o paciente."""
-    phone, error = extract_phone(runtime)
+    external_id, error = extract_user_id(runtime)
     if error:
         return error
 
     try:
-        events = await find_events_by_phone(phone)  # type: ignore[arg-type]
+        events = await find_events_by_external_id(external_id)  # type: ignore[arg-type]
     except GoogleCalendarNotConfiguredError:
         return _UNAVAILABLE_MSG
     except HttpError as exc:
-        logger.warning("calendar_list_failed", error=str(exc), phone=phone)
+        logger.warning("calendar_list_failed", error=str(exc), external_id=external_id)
         return _GENERIC_ERROR_MSG
 
     if not events:

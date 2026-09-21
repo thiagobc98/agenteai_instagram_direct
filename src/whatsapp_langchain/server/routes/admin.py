@@ -6,7 +6,7 @@ Usado pelo frontend (Next.js Admin Panel).
 Uso:
     curl http://localhost:8000/api/agents
     curl http://localhost:8000/api/chats?limit=20
-    curl http://localhost:8000/api/chats/+5511999999999
+    curl http://localhost:8000/api/chats/17841400000000000
     curl http://localhost:8000/api/metrics
 """
 
@@ -57,7 +57,7 @@ async def get_chats(
     async with pool.connection() as conn:
         cursor = await conn.execute(
             """
-            SELECT phone_number, agent_id, thread_id, last_message,
+            SELECT external_id, agent_id, thread_id, last_message,
                    last_message_at, message_count, created_at
             FROM conversations
             ORDER BY last_message_at DESC
@@ -74,7 +74,7 @@ async def get_chats(
 
     chats = [
         {
-            "phone_number": row[0],
+            "external_id": row[0],
             "agent_id": row[1],
             "thread_id": row[2],
             "last_message": row[3],
@@ -88,16 +88,16 @@ async def get_chats(
     return {"chats": chats, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/chats/{phone_number:path}")
+@router.get("/chats/{external_id:path}")
 async def get_chat_messages(
-    phone_number: str,
+    external_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict:
     """Lista mensagens de uma conversa específica.
 
     Args:
-        phone_number: Número de telefone do remetente.
+        external_id: ID do contato no Instagram (IGSID).
         limit: Máximo de resultados (1-200). Default: 50.
         offset: Offset para paginação. Default: 0.
 
@@ -114,11 +114,11 @@ async def get_chat_messages(
                    response, status, created_at, processed_at,
                    media_processing_error, error
             FROM message_queue
-            WHERE phone_number = %s
+            WHERE external_id = %s
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
             """,
-            (phone_number, limit, offset),
+            (external_id, limit, offset),
         )
         rows = await cursor.fetchall()
 
@@ -140,7 +140,7 @@ async def get_chat_messages(
         for row in rows
     ]
 
-    return {"phone_number": phone_number, "messages": messages}
+    return {"external_id": external_id, "messages": messages}
 
 
 @router.get("/metrics")
@@ -236,7 +236,8 @@ async def get_calendar_events(
                 "start": start_info.get("dateTime") or start_info.get("date"),
                 "end": end_info.get("dateTime") or end_info.get("date"),
                 "all_day": "date" in start_info,
-                "phone": private.get("phone"),
+                # Eventos antigos (WhatsApp) guardavam o telefone em "phone".
+                "external_id": private.get("external_id") or private.get("phone"),
                 "patient_name": private.get("patient_name"),
             }
         )

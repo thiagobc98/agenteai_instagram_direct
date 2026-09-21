@@ -1,6 +1,6 @@
 """Testes E2E de fluxos realistas — jornadas de usuário completas.
 
-Cada cenário simula uma jornada real de uso do sistema WhatsApp + LangGraph,
+Cada cenário simula uma jornada real de uso do sistema Instagram Direct + LangGraph,
 exercitando a integração entre webhook, fila, worker, agente e API admin.
 
 Estes testes são ideais para demonstrar em aula como debugar o sistema:
@@ -41,7 +41,7 @@ from .helpers import (
     query_queue_entry,
     send_webhook,
     send_webhook_and_wait,
-    unique_phone,
+    unique_igsid,
     unique_sid,
     wait_conversation_count,
     wait_memory_saved,
@@ -102,18 +102,18 @@ class TestJornadaNovoUsuario:
         self, db_url: str, admin_client: httpx.Client
     ) -> None:
         """Maria envia 2 mensagens e verificamos todo o pipeline."""
-        phone = unique_phone("11")
+        external_id = unique_igsid()
         agent = "secretaria"
 
         # --- Passo 1: Primeira mensagem ---
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Jornada do Novo Usuário")
-        print(f"Phone: {phone}")
+        print(f"IGSID: {external_id}")
         print(f"{'=' * 60}")
 
         print("\n[1/8] Enviando primeira mensagem...")
         sid1 = unique_sid("SMNEW")
-        resp1 = send_webhook(phone, "Olá! O que vocês fazem?", message_sid=sid1)
+        resp1 = send_webhook(external_id, "Olá! O que vocês fazem?", message_sid=sid1)
         assert resp1.status_code == 200, f"Webhook retornou {resp1.status_code}"
         print(f"  ✓ Webhook aceito (SID: {sid1})")
 
@@ -124,7 +124,7 @@ class TestJornadaNovoUsuario:
         print(f"  ✓ Resposta: {output1[:80]}...")
 
         print("[3/8] Verificando conversations no banco...")
-        conv = query_conversation(db_url, phone, agent)
+        conv = query_conversation(db_url, external_id, agent)
         assert conv is not None, "Conversa não foi criada em conversations"
         assert conv[0] == 1, f"message_count esperado 1, obteve {conv[0]}"
         print(f"  ✓ conversations.message_count = {conv[0]}")
@@ -132,7 +132,7 @@ class TestJornadaNovoUsuario:
         # --- Passo 2: Follow-up ---
         print("\n[4/8] Enviando segunda mensagem (follow-up)...")
         sid2 = unique_sid("SMNEW")
-        resp2 = send_webhook(phone, "Como posso aprender mais?", message_sid=sid2)
+        resp2 = send_webhook(external_id, "Como posso aprender mais?", message_sid=sid2)
         assert resp2.status_code == 200
         print(f"  ✓ Webhook aceito (SID: {sid2})")
 
@@ -143,13 +143,13 @@ class TestJornadaNovoUsuario:
         print(f"  ✓ Resposta: {output2[:80]}...")
 
         print("[6/8] Verificando conversations atualizada...")
-        conv2 = wait_conversation_count(db_url, phone, agent, expected_count=2)
+        conv2 = wait_conversation_count(db_url, external_id, agent, expected_count=2)
         assert conv2[0] == 2, f"message_count esperado 2, obteve {conv2[0]}"
         print(f"  ✓ conversations.message_count = {conv2[0]}")
 
         # --- Passo 3: Verificação via API Admin ---
-        print("[7/8] Verificando via GET /api/chats/{phone}...")
-        chat_resp = admin_client.get(f"/api/chats/{phone}")
+        print("[7/8] Verificando via GET /api/chats/{external_id}...")
+        chat_resp = admin_client.get(f"/api/chats/{external_id}")
         assert chat_resp.status_code == 200
         chat_data = chat_resp.json()
         messages = chat_data["messages"]
@@ -164,8 +164,8 @@ class TestJornadaNovoUsuario:
         list_resp = admin_client.get("/api/chats")
         assert list_resp.status_code == 200
         chats = list_resp.json()["chats"]
-        our_chat = [c for c in chats if c["phone_number"] == phone]
-        assert len(our_chat) == 1, f"Conversa de {phone} não aparece na listagem"
+        our_chat = [c for c in chats if c["external_id"] == external_id]
+        assert len(our_chat) == 1, f"Conversa de {external_id} não aparece na listagem"
         count = our_chat[0]["message_count"]
         print(f"  ✓ Conversa na listagem, message_count={count}")
 
@@ -188,20 +188,20 @@ class TestMemoriaSemantica:
 
     def test_memoria_persiste_entre_sessoes(self, db_url: str) -> None:
         """João salva um código secreto e recupera sem histórico de conversa."""
-        phone = unique_phone("21")
-        thread_id = f"{phone}:secretaria"
+        external_id = unique_igsid()
+        thread_id = f"{external_id}:secretaria"
         token = f"rhawk-{uuid.uuid4().hex[:8]}"
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Memória Semântica Persistente")
-        print(f"Phone: {phone} | Token: {token}")
+        print(f"IGSID: {external_id} | Token: {token}")
         print(f"{'=' * 60}")
 
         # --- Passo 1: Salvar memória ---
         print("\n[1/6] Enviando mensagem para salvar memória...")
         sid_save = unique_sid("SMMEM")
         resp = send_webhook(
-            phone,
+            external_id,
             (
                 "Use a ferramenta save_memory e salve este fato sobre mim: "
                 f"meu código de acesso é {token}. "
@@ -218,7 +218,7 @@ class TestMemoriaSemantica:
         print(f"  ✓ Agente respondeu: {output[:80]}...")
 
         print("[3/6] Aguardando memória no store...")
-        wait_memory_saved(db_url, phone, contains=token)
+        wait_memory_saved(db_url, external_id, contains=token)
         print(f"  ✓ Memória com '{token}' encontrada no store")
 
         # --- Passo 2: Limpar checkpoints (simula nova sessão) ---
@@ -230,7 +230,7 @@ class TestMemoriaSemantica:
         print("[5/6] Enviando mensagem para recuperar memória...")
         sid_recall = unique_sid("SMMEM")
         resp2 = send_webhook(
-            phone,
+            external_id,
             (
                 "Sem usar save_memory agora, use read_memory para recuperar "
                 "meu código de acesso e responda apenas com o valor."
@@ -266,13 +266,13 @@ class TestDebounce:
 
     def test_debounce_agrupa_mensagens_rapidas(self, db_url: str) -> None:
         """3 mensagens rápidas viram 1 entrada na fila."""
-        phone = unique_phone("31")
+        external_id = unique_igsid()
         agent = "secretaria"
         messages = ["Oi", "Tudo bem?", "Quero saber sobre LangGraph"]
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Debounce de Mensagens Rápidas")
-        print(f"Phone: {phone}")
+        print(f"IGSID: {external_id}")
         print(f"{'=' * 60}")
 
         # --- Passo 1: Enviar 3 mensagens SEM esperar entre elas ---
@@ -280,7 +280,7 @@ class TestDebounce:
         sids = []
         for i, msg in enumerate(messages):
             sid = unique_sid("SMDEB")
-            resp = send_webhook(phone, msg, message_sid=sid)
+            resp = send_webhook(external_id, msg, message_sid=sid)
             assert resp.status_code == 200, (
                 f"Mensagem {i + 1} falhou: {resp.status_code}"
             )
@@ -289,12 +289,12 @@ class TestDebounce:
 
         # --- Passo 2: Aguardar processamento ---
         print("[2/4] Aguardando fila processar (debounce + worker)...")
-        wait_queue_done(db_url, phone, agent, timeout_seconds=120)
+        wait_queue_done(db_url, external_id, agent, timeout_seconds=120)
         print("  ✓ Fila vazia (tudo processado)")
 
         # --- Passo 3: Verificar debounce ---
         print("[3/4] Verificando entradas na fila...")
-        total = count_queue_entries(db_url, phone, agent)
+        total = count_queue_entries(db_url, external_id, agent)
         # O debounce concatena mensagens rápidas: esperamos 1 entrada (ou no máximo 2
         # se o timing variou). O importante é que NÃO temos 3 entradas separadas.
         print(f"  Entradas na fila: {total} (esperado: 1, máximo aceitável: 2)")
@@ -305,7 +305,7 @@ class TestDebounce:
 
         # --- Passo 4: Verificar conteúdo concatenado ---
         print("[4/4] Verificando conteúdo concatenado...")
-        entry = query_queue_entry(db_url, phone, agent)
+        entry = query_queue_entry(db_url, external_id, agent)
         assert entry is not None, "Nenhuma entrada encontrada na fila"
         incoming = entry[1]  # incoming_message
         # Pelo menos as últimas mensagens devem estar concatenadas
@@ -340,15 +340,15 @@ class TestUsuariosSimultaneos:
     ) -> None:
         """3 usuários enviam mensagens e cada um recebe sua resposta."""
         users = [
-            {"phone": unique_phone("41"), "msg": "Olá, me chamo Alice."},
-            {"phone": unique_phone("42"), "msg": "Oi, sou o Bruno."},
-            {"phone": unique_phone("43"), "msg": "Hey, aqui é a Carol."},
+            {"external_id": unique_igsid(), "msg": "Olá, me chamo Alice."},
+            {"external_id": unique_igsid(), "msg": "Oi, sou o Bruno."},
+            {"external_id": unique_igsid(), "msg": "Hey, aqui é a Carol."},
         ]
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Múltiplos Usuários Simultâneos")
         for u in users:
-            print(f"  {u['phone']}: {u['msg']}")
+            print(f"  {u['external_id']}: {u['msg']}")
         print(f"{'=' * 60}")
 
         # --- Passo 1: Enviar webhooks em paralelo ---
@@ -357,32 +357,36 @@ class TestUsuariosSimultaneos:
 
         def send_and_track(user: dict) -> dict:
             sid = unique_sid("SMPAR")
-            resp = send_webhook(user["phone"], user["msg"], message_sid=sid)
-            return {"phone": user["phone"], "sid": sid, "status_code": resp.status_code}
+            resp = send_webhook(user["external_id"], user["msg"], message_sid=sid)
+            return {
+                "external_id": user["external_id"],
+                "sid": sid,
+                "status_code": resp.status_code,
+            }
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {executor.submit(send_and_track, u): u for u in users}
             for future in as_completed(futures):
                 result = future.result()
-                results[result["phone"]] = result
+                results[result["external_id"]] = result
                 assert result["status_code"] == 200
-                print(f"  ✓ {result['phone']} → SID: {result['sid']}")
+                print(f"  ✓ {result['external_id']} → SID: {result['sid']}")
 
         # --- Passo 2: Aguardar todos processarem ---
         print("[2/4] Aguardando todos processarem...")
-        for phone, info in results.items():
+        for external_id, info in results.items():
             status, output, error, _ = wait_terminal_status(db_url, info["sid"])
-            assert status == "done", f"{phone} falhou: {error}"
+            assert status == "done", f"{external_id} falhou: {error}"
             info["output"] = output
-            print(f"  ✓ {phone}: {output[:60]}...")
+            print(f"  ✓ {external_id}: {output[:60]}...")
 
         # --- Passo 3: Verificar conversations isoladas ---
         print("[3/4] Verificando isolamento de conversations...")
-        for phone in results:
-            conv = query_conversation(db_url, phone, "secretaria")
-            assert conv is not None, f"Conversa de {phone} não encontrada"
-            assert conv[0] >= 1, f"message_count de {phone} = {conv[0]}"
-            print(f"  ✓ {phone}: message_count = {conv[0]}")
+        for external_id in results:
+            conv = query_conversation(db_url, external_id, "secretaria")
+            assert conv is not None, f"Conversa de {external_id} não encontrada"
+            assert conv[0] >= 1, f"message_count de {external_id} = {conv[0]}"
+            print(f"  ✓ {external_id}: message_count = {conv[0]}")
 
         # --- Passo 4: Verificar métricas ---
         print("[4/4] Verificando GET /api/metrics...")
@@ -417,12 +421,12 @@ class TestRateLimiting:
 
     def test_rate_limit_bloqueia_apos_limite(self, db_url: str) -> None:
         """Envia mensagens até receber HTTP 429."""
-        phone = unique_phone("51")
+        external_id = unique_igsid()
         limit = 30  # settings.rate_limit_per_hour default
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Rate Limiting")
-        print(f"Phone: {phone} | Limite: {limit}/hora")
+        print(f"IGSID: {external_id} | Limite: {limit}/hora")
         print(f"{'=' * 60}")
 
         print(f"\n[1/3] Enviando {limit} mensagens para atingir o limite...")
@@ -430,7 +434,7 @@ class TestRateLimiting:
         blocked_at = None
         for i in range(limit + 5):  # Envia um pouco além do limite
             resp = send_webhook(
-                phone,
+                external_id,
                 f"Mensagem {i + 1}",
                 message_sid=unique_sid("SMRL"),
             )
@@ -450,7 +454,7 @@ class TestRateLimiting:
 
         # --- Passo 2: Verificar que a mensagem 429 tem corpo descritivo ---
         print("[2/3] Verificando resposta do rate limit...")
-        resp_429 = send_webhook(phone, "Mais uma", message_sid=unique_sid("SMRL"))
+        resp_429 = send_webhook(external_id, "Mais uma", message_sid=unique_sid("SMRL"))
         assert resp_429.status_code == 429
         body = resp_429.json()
         assert "detail" in body, "Resposta 429 sem campo 'detail'"
@@ -458,7 +462,7 @@ class TestRateLimiting:
 
         # --- Passo 3: Verificar que mensagens aceitas foram enfileiradas ---
         print(f"[3/3] Verificando que {accepted} mensagens foram enfileiradas...")
-        total = count_queue_entries(db_url, phone, "secretaria")
+        total = count_queue_entries(db_url, external_id, "secretaria")
         # O debounce pode ter agrupado várias, mas deve ter pelo menos 1
         assert total >= 1, "Nenhuma mensagem enfileirada antes do rate limit"
         print(f"  ✓ {total} entrada(s) na fila (debounce pode ter agrupado)")
@@ -481,16 +485,16 @@ class TestAgenteInvalido:
 
     def test_agente_inexistente_retorna_erro(self, db_url: str) -> None:
         """Webhook com agent=fantasma retorna erro HTTP."""
-        phone = unique_phone("61")
+        external_id = unique_igsid()
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Agente Inválido")
-        print(f"Phone: {phone}")
+        print(f"IGSID: {external_id}")
         print(f"{'=' * 60}")
 
         print("\n[1/2] Enviando webhook com agente inexistente...")
         resp = send_webhook(
-            phone,
+            external_id,
             "Olá!",
             agent="agente_fantasma",
             message_sid=unique_sid("SMERR"),
@@ -501,7 +505,7 @@ class TestAgenteInvalido:
         print(f"  ✓ HTTP 400: {body['detail']}")
 
         print("[2/2] Verificando que nenhuma mensagem foi enfileirada...")
-        total = count_queue_entries(db_url, phone, "agente_fantasma")
+        total = count_queue_entries(db_url, external_id, "agente_fantasma")
         assert total == 0, f"Mensagem foi enfileirada para agente inválido ({total})"
         print("  ✓ Fila vazia para agente inexistente")
 
@@ -525,16 +529,18 @@ class TestConsistenciaAPIAdmin:
         self, db_url: str, admin_client: httpx.Client
     ) -> None:
         """Endpoints admin retornam dados consistentes após interação."""
-        phone = unique_phone("71")
+        external_id = unique_igsid()
 
         print(f"\n{'=' * 60}")
         print("CENÁRIO: Consistência da API Admin")
-        print(f"Phone: {phone}")
+        print(f"IGSID: {external_id}")
         print(f"{'=' * 60}")
 
         # Cria uma interação para ter dados frescos
         print("\n[1/5] Criando interação de referência...")
-        sid, row = send_webhook_and_wait(db_url, phone, "Teste de consistência da API.")
+        sid, row = send_webhook_and_wait(
+            db_url, external_id, "Teste de consistência da API."
+        )
         status, output, error, _ = row
         assert status == "done", f"Mensagem falhou: {error}"
         print(f"  ✓ Mensagem processada (SID: {sid})")
@@ -544,9 +550,7 @@ class TestConsistenciaAPIAdmin:
         agents_resp = admin_client.get("/api/agents")
         assert agents_resp.status_code == 200
         agents = agents_resp.json()["agents"]
-        assert "secretaria" in agents, (
-            f"secretaria não está na lista: {agents}"
-        )
+        assert "secretaria" in agents, f"secretaria não está na lista: {agents}"
         print(f"  ✓ Agentes disponíveis: {agents}")
 
         # --- GET /api/chats ---
@@ -555,14 +559,18 @@ class TestConsistenciaAPIAdmin:
         assert chats_resp.status_code == 200
         chats_data = chats_resp.json()
         chats = chats_data["chats"]
-        our = [c for c in chats if c["phone_number"] == phone]
-        assert len(our) == 1, f"Conversa de {phone} aparece {len(our)}x (esperado 1)"
+        our = [c for c in chats if c["external_id"] == external_id]
+        assert len(our) == 1, (
+            f"Conversa de {external_id} aparece {len(our)}x (esperado 1)"
+        )
         print(f"  ✓ {chats_data['total']} conversas no total, nossa incluída")
-        print(f"    phone={our[0]['phone_number']}, count={our[0]['message_count']}")
+        print(
+            f"    external_id={our[0]['external_id']}, count={our[0]['message_count']}"
+        )
 
-        # --- GET /api/chats/{phone} ---
-        print(f"[4/5] Verificando GET /api/chats/{phone}...")
-        msgs_resp = admin_client.get(f"/api/chats/{phone}")
+        # --- GET /api/chats/{external_id} ---
+        print(f"[4/5] Verificando GET /api/chats/{external_id}...")
+        msgs_resp = admin_client.get(f"/api/chats/{external_id}")
         assert msgs_resp.status_code == 200
         msgs = msgs_resp.json()["messages"]
         assert len(msgs) >= 1, "Nenhuma mensagem retornada"

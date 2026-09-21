@@ -28,9 +28,9 @@ class TestMessageQueue:
         """Cria mensagem com campos mínimos obrigatórios."""
         msg = MessageQueue(
             id=1,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="secretaria",
-            thread_id="+5511999999999:secretaria",
+            thread_id="17841400000000001:secretaria",
             incoming_message="Olá!",
         )
         assert msg.status == MessageStatus.QUEUED
@@ -39,12 +39,12 @@ class TestMessageQueue:
         assert msg.media_url is None
 
     def test_message_with_media(self):
-        """Cria mensagem com mídia anexada (base64, via Evolution API)."""
+        """Cria mensagem com mídia anexada (base64)."""
         msg = MessageQueue(
             id=1,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="secretaria",
-            thread_id="+5511999999999:secretaria",
+            thread_id="17841400000000001:secretaria",
             incoming_message="Veja esta foto",
             media_base64="aGVsbG8=",
             media_type="image/jpeg",
@@ -57,7 +57,7 @@ class TestMessageQueue:
         with pytest.raises(ValidationError):
             MessageQueue(
                 id=1,
-                phone_number="+5511999999999",
+                external_id="17841400000000001",
                 # agent_id ausente
                 thread_id="test",
                 incoming_message="Olá!",

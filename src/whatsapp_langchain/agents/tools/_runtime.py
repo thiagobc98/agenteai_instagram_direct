@@ -1,6 +1,6 @@
 """Helpers internos para extrair contexto de execução (runtime) das tools.
 
-O worker injeta `user_id` (telefone do remetente) e `thread_id` via
+O worker injeta `user_id` (IGSID do remetente no Instagram) e `thread_id` via
 `configurable` em cada chamada ao grafo — ver worker/processor.py. Tools que
 precisam identificar o remetente atual (memória, agendamento, etc.) resolvem
 esse valor por aqui.
@@ -29,11 +29,11 @@ def extract_configurable(runtime: Any) -> dict:
     return {}
 
 
-def extract_phone(runtime: Any) -> tuple[str | None, str | None]:
-    """Resolve o telefone do remetente atual (`user_id`) a partir do runtime.
+def extract_user_id(runtime: Any) -> tuple[str | None, str | None]:
+    """Resolve o ID do remetente atual (`user_id`) a partir do runtime.
 
     Returns:
-        (phone, error) — error é None quando phone foi encontrado.
+        (user_id, error) — error é None quando user_id foi encontrado.
     """
     configurable = extract_configurable(runtime)
     user_id = configurable.get("user_id")

@@ -6,11 +6,12 @@ Centralizar aqui mantém as rotas limpas e focadas na lógica de negócio.
 Uso:
     from whatsapp_langchain.server.dependencies import check_rate_limit
 
-    @router.post("/webhook/evolution/{token}")
-    async def webhook(rate_limit: None = Depends(check_rate_limit)):
+    @router.post("/webhook/instagram")
+    async def webhook(_valid: None = Depends(validate_instagram_signature)):
         ...
 """
 
+import hashlib
 import hmac
 import time
 import uuid
@@ -24,45 +25,65 @@ from whatsapp_langchain.shared.redis_client import get_redis
 logger = structlog.get_logger()
 
 
-async def validate_evolution_webhook_token(token: str) -> None:
-    """Valida o token secreto do path `/webhook/evolution/{token}`.
+def verify_instagram_signature(
+    raw_body: bytes, signature_header: str | None, app_secret: str
+) -> bool:
+    """Confere o header X-Hub-Signature-256 contra o body bruto.
 
-    O Evolution API não assina os webhooks (sem equivalente ao
-    X-Twilio-Signature do Twilio) — a proteção aqui é um token compartilhado
-    próprio (EVOLUTION_WEBHOOK_TOKEN), incluído na URL configurada no
-    Evolution Manager. Comparação em tempo constante evita timing attack.
+    A Meta assina o payload com HMAC-SHA256 usando o App Secret e envia o
+    resultado como `sha256=<hex>`. Comparação em tempo constante evita
+    timing attack.
+    """
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+
+    expected = hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    received = signature_header.removeprefix("sha256=")
+    return hmac.compare_digest(expected, received)
+
+
+async def validate_instagram_signature(request: Request) -> None:
+    """Valida a assinatura X-Hub-Signature-256 do webhook do Instagram.
+
+    A Meta assina cada POST com o App Secret (INSTAGRAM_APP_SECRET); só quem
+    conhece o segredo consegue gerar uma assinatura válida.
 
     Raises:
-        HTTPException 403: Se o token não confere.
-        HTTPException 500: Se EVOLUTION_WEBHOOK_TOKEN não está configurado.
+        HTTPException 403: Se a assinatura está ausente ou não confere.
+        HTTPException 500: Se INSTAGRAM_APP_SECRET não está configurado.
     """
-    if not settings.evolution_webhook_token:
-        logger.error("evolution_webhook_token_not_configured")
+    app_secret = settings.instagram_app_secret
+    if app_secret is None or not app_secret.get_secret_value():
+        logger.error("instagram_app_secret_not_configured")
         raise HTTPException(
             status_code=500,
-            detail="Evolution webhook token not configured",
+            detail="Instagram app secret not configured",
         )
 
-    if not hmac.compare_digest(token, settings.evolution_webhook_token):
-        logger.warning("evolution_webhook_token_invalid")
-        raise HTTPException(status_code=403, detail="Invalid webhook token")
+    raw_body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_instagram_signature(
+        raw_body, signature, app_secret.get_secret_value()
+    ):
+        logger.warning("instagram_signature_invalid")
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
 
-async def check_rate_limit(phone_number: str) -> None:
-    """Verifica rate limit por número de telefone.
+async def check_rate_limit(external_id: str) -> None:
+    """Verifica rate limit por remetente (IGSID).
 
     Usa sliding window de 1 hora em Redis (sorted set), compartilhado entre
     todas as réplicas da API. Remove entradas antigas e compara a
     quantidade de requisições com o limite configurado.
 
     Args:
-        phone_number: Número de telefone do remetente.
+        external_id: Identificador do remetente (IGSID do Instagram).
 
     Raises:
         HTTPException 429: Se o limite foi atingido.
     """
     redis = await get_redis()
-    key = f"ratelimit:{phone_number}"
+    key = f"ratelimit:{external_id}"
     now = time.time()
     one_hour_ago = now - 3600
 
@@ -75,7 +96,7 @@ async def check_rate_limit(phone_number: str) -> None:
     if count >= settings.rate_limit_per_hour:
         logger.warning(
             "rate_limit_exceeded",
-            phone=phone_number,
+            external_id=external_id,
             count=count,
             limit=settings.rate_limit_per_hour,
         )

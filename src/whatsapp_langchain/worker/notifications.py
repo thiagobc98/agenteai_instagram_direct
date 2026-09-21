@@ -1,4 +1,4 @@
-"""Notificações proativas via WhatsApp — fora do ciclo normal de webhook.
+"""Notificações proativas via Instagram Direct — fora do ciclo normal de webhook.
 
 Diferente do fluxo padrão (responder a uma mensagem recebida), estas
 funções enviam mensagens por iniciativa do sistema. Ambas são disparadas
@@ -9,9 +9,15 @@ uma vez por dia, em horário fixo, pelo loop do Worker (ver worker/main.py):
 - `send_patient_reminders`: lembrete de consulta para cada paciente com
   consulta amanhã, no horário configurado em `PATIENT_REMINDER_HOUR`.
 
-Ambas usam `EvolutionClient.send_message` diretamente — sem passar pela
+Ambas usam `InstagramClient.send_message` diretamente — sem passar pela
 fila `message_queue` — e nunca propagam exceção: falha ao notificar não
 deve interromper o loop do Worker.
+
+Regra do Instagram: só é possível enviar mensagem a quem escreveu para a
+conta nas últimas 24h. Antes de cada envio por iniciativa do sistema,
+`_can_notify` confere a última mensagem recebida do destinatário; fora da
+janela a notificação NÃO é enviada e o motivo fica registrado em log
+(`*_skipped_outside_window`). Ver docs/INSTAGRAM_API.md.
 """
 
 from __future__ import annotations
@@ -29,9 +35,11 @@ from whatsapp_langchain.shared.google_calendar import (
     GoogleCalendarNotConfiguredError,
     list_events,
 )
-from whatsapp_langchain.worker.evolution_client import (
-    EvolutionClient,
-    EvolutionSendError,
+from whatsapp_langchain.shared.queue import get_last_inbound_at
+from whatsapp_langchain.worker.instagram_client import (
+    InstagramClient,
+    InstagramSendError,
+    is_within_messaging_window,
 )
 
 logger = structlog.get_logger()
@@ -54,14 +62,38 @@ def _event_private(event: dict[str, Any]) -> dict[str, Any]:
     return event.get("extendedProperties", {}).get("private", {})
 
 
-async def notify_doctor_tomorrow_schedule(evolution: EvolutionClient) -> None:
-    """Envia para o WhatsApp da médica a agenda completa do dia seguinte.
+async def _can_notify(pool: AsyncConnectionPool, external_id: str) -> bool:
+    """Indica se ainda estamos dentro da janela de 24h do Instagram."""
+    last_inbound_at = await get_last_inbound_at(pool, external_id)
+    return is_within_messaging_window(last_inbound_at)
 
-    Best-effort: nunca levanta exceção — chamada logo após um agendamento,
-    remarcação ou cancelamento ter sucesso, não deve derrubar essa resposta
-    ao paciente se a notificação falhar.
+
+async def notify_doctor_tomorrow_schedule(
+    pool: AsyncConnectionPool, instagram: InstagramClient
+) -> None:
+    """Envia para o Instagram da médica a agenda completa do dia seguinte.
+
+    Best-effort: nunca levanta exceção — falha ao notificar não deve
+    derrubar o loop do Worker. A médica só recebe se tiver escrito para a
+    conta nas últimas 24h (janela do Instagram); caso contrário o envio é
+    pulado e registrado em log.
     """
-    if not settings.doctor_whatsapp_number:
+    doctor_id = settings.doctor_instagram_id
+    if not doctor_id:
+        return
+
+    try:
+        can_notify = await _can_notify(pool, doctor_id)
+    except Exception as exc:
+        logger.warning("doctor_notification_window_check_failed", error=str(exc))
+        return
+
+    if not can_notify:
+        logger.warning(
+            "doctor_notification_skipped_outside_window",
+            external_id=doctor_id,
+            hint="a médica precisa enviar uma mensagem à conta nas últimas 24h",
+        )
         return
 
     start, end = _tomorrow_range()
@@ -93,21 +125,28 @@ async def notify_doctor_tomorrow_schedule(evolution: EvolutionClient) -> None:
         body = "\n".join(lines)
 
     try:
-        await evolution.send_message(to=settings.doctor_whatsapp_number, body=body)
-    except EvolutionSendError as exc:
+        await instagram.send_message(to=doctor_id, body=body)
+    except InstagramSendError as exc:
         logger.warning("doctor_notification_send_failed", error=str(exc))
     else:
         logger.info("doctor_notification_sent", event_count=len(events))
 
 
 async def send_patient_reminders(
-    pool: AsyncConnectionPool, evolution: EvolutionClient
+    pool: AsyncConnectionPool, instagram: InstagramClient
 ) -> None:
     """Envia lembrete de confirmação a cada paciente com consulta amanhã.
 
     Idempotente: usa a tabela `appointment_reminders` para nunca reenviar o
     mesmo evento — seguro de chamar mais de uma vez por dia (ex: após um
     restart do Worker).
+
+    Só envia a quem escreveu para a conta nas últimas 24h (janela do
+    Instagram). Pacientes fora da janela são pulados com log
+    `patient_reminder_skipped_outside_window` e NÃO são marcados como
+    lembrados (uma nova execução no mesmo dia, ex: após restart do Worker,
+    tenta de novo). O loop do Worker roda uma vez por dia — na prática,
+    o lembrete só chega a quem falou com a conta nas 24h anteriores.
     """
     start, end = _tomorrow_range()
 
@@ -126,8 +165,8 @@ async def send_patient_reminders(
             continue
 
         private = _event_private(event)
-        phone = private.get("phone")
-        if not phone:
+        external_id = private.get("external_id")
+        if not external_id:
             continue
 
         async with pool.connection() as conn:
@@ -137,6 +176,24 @@ async def send_patient_reminders(
             )
             already_sent = await cursor.fetchone()
         if already_sent:
+            continue
+
+        try:
+            can_notify = await _can_notify(pool, external_id)
+        except Exception as exc:
+            logger.warning(
+                "patient_reminder_window_check_failed",
+                event_id=event_id,
+                error=str(exc),
+            )
+            continue
+
+        if not can_notify:
+            logger.warning(
+                "patient_reminder_skipped_outside_window",
+                event_id=event_id,
+                external_id=external_id,
+            )
             continue
 
         when = datetime.fromisoformat(start_raw)
@@ -151,8 +208,8 @@ async def send_patient_reminders(
         )
 
         try:
-            await evolution.send_message(to=phone, body=body)
-        except EvolutionSendError as exc:
+            await instagram.send_message(to=external_id, body=body)
+        except InstagramSendError as exc:
             logger.warning(
                 "patient_reminder_send_failed", event_id=event_id, error=str(exc)
             )
@@ -162,12 +219,12 @@ async def send_patient_reminders(
             await conn.execute(
                 """
                 INSERT INTO appointment_reminders
-                    (event_id, phone_number, appointment_start)
+                    (event_id, external_id, appointment_start)
                 VALUES (%s, %s, %s)
                 ON CONFLICT (event_id) DO NOTHING
                 """,
-                (event_id, phone, when),
+                (event_id, external_id, when),
             )
             await conn.commit()
 
-        logger.info("patient_reminder_sent", event_id=event_id, phone=phone)
+        logger.info("patient_reminder_sent", event_id=event_id, external_id=external_id)

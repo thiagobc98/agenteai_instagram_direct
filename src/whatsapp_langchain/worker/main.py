@@ -23,7 +23,7 @@ from whatsapp_langchain.shared.db import (
 )
 from whatsapp_langchain.shared.observability import setup_logging
 from whatsapp_langchain.worker.consumer import claim_next_message
-from whatsapp_langchain.worker.evolution_client import EvolutionClient
+from whatsapp_langchain.worker.instagram_client import InstagramClient
 from whatsapp_langchain.worker.notifications import (
     notify_doctor_tomorrow_schedule,
     send_patient_reminders,
@@ -53,29 +53,26 @@ async def main() -> None:
     if store:
         await store.setup()
 
-    # Evolution API outbound: obrigatório — fail-fast se credenciais ausentes.
-    missing = []
-    if not settings.evolution_base_url:
-        missing.append("EVOLUTION_BASE_URL")
-    if not settings.evolution_api_key:
-        missing.append("EVOLUTION_API_KEY")
-    if not settings.evolution_instance:
-        missing.append("EVOLUTION_INSTANCE")
-
-    if missing:
+    # Instagram Messaging API outbound: obrigatório — fail-fast se o token
+    # de acesso está ausente.
+    access_token = settings.instagram_access_token
+    if access_token is None or not access_token.get_secret_value():
         logger.error(
-            "evolution_credentials_missing",
-            missing=missing,
+            "instagram_credentials_missing", missing=["INSTAGRAM_ACCESS_TOKEN"]
         )
-        msg = f"Evolution API obrigatório. Variáveis ausentes: {', '.join(missing)}"
+        msg = "Instagram obrigatório. Variáveis ausentes: INSTAGRAM_ACCESS_TOKEN"
         raise SystemExit(msg)
 
-    evolution = EvolutionClient(
-        base_url=settings.evolution_base_url,
-        api_key=settings.evolution_api_key,
-        instance=settings.evolution_instance,
+    instagram = InstagramClient(
+        access_token=access_token.get_secret_value(),
+        api_version=settings.instagram_graph_api_version,
+        base_url=settings.instagram_graph_base_url,
     )
-    logger.info("evolution_client_ready", instance=settings.evolution_instance)
+    logger.info(
+        "instagram_client_ready",
+        api_version=settings.instagram_graph_api_version,
+        base_url=settings.instagram_graph_base_url,
+    )
 
     logger.info(
         "worker_ready",
@@ -101,7 +98,7 @@ async def main() -> None:
             if reminder_due and last_reminder_date != now.date():
                 last_reminder_date = now.date()
                 try:
-                    await send_patient_reminders(pool, evolution)
+                    await send_patient_reminders(pool, instagram)
                 except Exception as exc:
                     logger.error("patient_reminders_tick_failed", error=str(exc))
 
@@ -109,7 +106,7 @@ async def main() -> None:
             if summary_due and last_doctor_summary_date != now.date():
                 last_doctor_summary_date = now.date()
                 try:
-                    await notify_doctor_tomorrow_schedule(evolution)
+                    await notify_doctor_tomorrow_schedule(pool, instagram)
                 except Exception as exc:
                     logger.error("doctor_summary_tick_failed", error=str(exc))
 
@@ -124,7 +121,7 @@ async def main() -> None:
                 pool,
                 checkpointer=checkpointer,
                 store=store,
-                evolution=evolution,
+                instagram=instagram,
             )
 
     except KeyboardInterrupt:

@@ -9,7 +9,7 @@ save_memory_fn = save_memory.coroutine
 read_memory_fn = read_memory.coroutine
 
 
-def _make_runtime(*, user_id: str | None = "+5511999999999"):
+def _make_runtime(*, user_id: str | None = "17841400000000001"):
     configurable = {"thread_id": "thread-test"}
     if user_id:
         configurable["user_id"] = user_id
@@ -36,7 +36,7 @@ class TestSaveMemoryTool:
 
     def test_saves_memory_with_store_and_user(self):
         store = AsyncMock()
-        runtime = _make_runtime(user_id="+5511888888888")
+        runtime = _make_runtime(user_id="17841400000000002")
 
         result = asyncio.run(
             save_memory_fn("Usuário prefere Python", runtime=runtime, store=store)
@@ -46,7 +46,7 @@ class TestSaveMemoryTool:
         store.aput.assert_called_once()
         namespace = store.aput.call_args[0][0]
         value = store.aput.call_args[0][2]
-        assert namespace == ("+5511888888888", "memories")
+        assert namespace == ("17841400000000002", "memories")
         assert value["memory"] == "Usuário prefere Python"
 
     def test_returns_message_when_store_missing(self):
@@ -78,7 +78,7 @@ class TestReadMemoryTool:
             _memory_item({"memory": "Nome: Maria"}),
             _memory_item({"memory": "Prefere respostas curtas"}),
         ]
-        runtime = _make_runtime(user_id="+5511777777777")
+        runtime = _make_runtime(user_id="17841400000000003")
 
         result = asyncio.run(
             read_memory_fn("quem é o usuário", limit=5, runtime=runtime, store=store)
@@ -89,7 +89,7 @@ class TestReadMemoryTool:
         assert "prefere respostas curtas" in result.lower()
         store.asearch.assert_called_once()
         namespace = store.asearch.call_args[0][0]
-        assert namespace == ("+5511777777777", "memories")
+        assert namespace == ("17841400000000003", "memories")
 
     def test_clamps_limit(self):
         store = AsyncMock()
