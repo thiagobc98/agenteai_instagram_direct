@@ -44,7 +44,7 @@ Google Workspace.
 ## 2. Compartilhar a agenda com a Service Account
 
 1. Abra o [Google Agenda](https://calendar.google.com/) com a conta cuja
-   agenda o bot vai gerenciar (ex: a conta da Dra. Luana Lima).
+   agenda o bot vai gerenciar (ex: a conta da loja).
 2. Nas configurações da agenda desejada (ícone de engrenagem → "Configurações
    e compartilhamento com pessoas específicas") → **Adicionar pessoas e
    grupos**.

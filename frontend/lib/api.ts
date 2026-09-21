@@ -82,24 +82,6 @@ export interface ChatMessagesResponse {
   messages: ChatMessage[];
 }
 
-export interface CalendarEvent {
-  id: string;
-  summary: string;
-  start: string;
-  end: string;
-  all_day: boolean;
-  external_id: string | null;
-  patient_name: string | null;
-}
-
-export interface CalendarEventsResponse {
-  enabled: boolean;
-  calendar_id?: string;
-  business_hour_start?: number;
-  business_hour_end?: number;
-  events: CalendarEvent[];
-}
-
 export const api = {
   login: (username: string, password: string) =>
     request<AdminUser>("/api/auth/login", {
@@ -121,10 +103,5 @@ export const api = {
   chatMessages: (externalId: string, limit = 50, offset = 0) =>
     request<ChatMessagesResponse>(
       `/api/chats/${encodeURIComponent(externalId)}?limit=${limit}&offset=${offset}`,
-    ),
-
-  calendarEvents: (start: Date, end: Date) =>
-    request<CalendarEventsResponse>(
-      `/api/calendar/events?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`,
     ),
 };

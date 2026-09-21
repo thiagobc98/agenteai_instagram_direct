@@ -150,7 +150,7 @@ Define `build_graph()`, a factory do agente **secretaria** usando `create_agent`
 Exporta a variável `graph` exigida pelo `langgraph dev`/`langgraph.json`. Chama `build_graph(enable_memory_tools=True)` **sem** checkpointer/store customizados, porque a plataforma LangGraph Studio injeta os seus próprios automaticamente — passar um store customizado seria rejeitado no carregamento.
 
 #### `agents/catalog/secretaria/prompts.py`
-Contém `SYSTEM_PROMPT`: a persona da secretária virtual da Dra. Luana Lima (atendimento e agendamento) — diretrizes de tom (português, direto, respostas curtas e em texto simples para o Direct do Instagram — sem markdown) e instruções explícitas de quando usar `save_memory`/`read_memory`.
+Contém `SYSTEM_PROMPT`: a persona da Juliana, atendente virtual da loja de calçados femininos Patricia Berberich (atendimento, encaminhamento à Patrícia para preços/frete/estoque/trocas) — diretrizes de tom (português, direto, respostas curtas e em texto simples para o Direct do Instagram — sem markdown) e instruções explícitas de quando usar `save_memory`/`read_memory`.
 
 #### `agents/catalog/secretaria/__init__.py`, `agents/catalog/__init__.py`, `agents/__init__.py`
 Marcadores de pacote Python; `agents/catalog/__init__.py` mantém o diretório `catalog/` importável (necessário para o `importlib.import_module` do loader funcionar).

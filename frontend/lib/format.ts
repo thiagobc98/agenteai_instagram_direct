@@ -25,7 +25,7 @@ export function formatContactId(raw: string): string {
 }
 
 const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  secretaria: "Secretária",
+  secretaria: "Atendente virtual",
 };
 
 export function formatAgentName(agentId: string): string {

@@ -1,4 +1,4 @@
-"""Agente secretaria - assistente da comunidade Top Hawks.
+"""Agente secretaria - atendente virtual da loja Patricia Berberich (Instagram).
 
 Agente simples usando create_agent do LangChain 1.0.
 Usa middleware de contexto configurável (trim ou summarize)
@@ -41,6 +41,9 @@ from whatsapp_langchain.shared.llm import create_chat_model
 
 from .prompts import SYSTEM_PROMPT
 
+# Como a atendente se apresenta na primeira mensagem (ver middleware de saudação).
+GREETING_INTRO = "Aqui quem fala é a Juliana, atendente virtual da Patricia Berberich"
+
 
 def build_graph(
     checkpointer: BaseCheckpointSaver | None = None,
@@ -77,7 +80,10 @@ def build_graph(
 
     # Middleware de contexto baseado em CONTEXT_STRATEGY, mais a saudação
     # dinâmica (bom dia/tarde/noite) recalculada a cada chamada ao modelo
-    middleware = [*get_context_middleware(), create_greeting_middleware(SYSTEM_PROMPT)]
+    middleware = [
+        *get_context_middleware(),
+        create_greeting_middleware(SYSTEM_PROMPT, GREETING_INTRO),
+    ]
 
     if enable_memory_tools is None:
         enable_memory_tools = store is not None

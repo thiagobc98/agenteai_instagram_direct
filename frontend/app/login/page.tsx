@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "../../lib/api";
-import { IconCross, IconLock, IconUser } from "../../components/icons";
+import { IconChats, IconLock, IconUser } from "../../components/icons";
 import styles from "./page.module.css";
 
 export default function LoginPage() {
@@ -32,10 +32,10 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className={`card ${styles.card}`}>
         <div className={styles.logo}>
           <span className={styles.logoMark}>
-            <IconCross size={20} />
+            <IconChats size={20} />
           </span>
           <div>
-            <h1 className={styles.title}>Clínica Dra. Luana Lima</h1>
+            <h1 className={styles.title}>Patricia Berberich</h1>
             <p className={styles.subtitle}>Painel administrativo</p>
           </div>
         </div>
