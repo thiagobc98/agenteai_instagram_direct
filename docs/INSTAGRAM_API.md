@@ -79,6 +79,17 @@ não muda (ambos usam `POST /me/messages`).
   **App Review** das permissões (acesso avançado), política de privacidade e,
   dependendo da conta, verificação do negócio. Prepare um vídeo mostrando o
   fluxo de mensagens e confira os requisitos atuais no painel.
+- **Webhooks só chegam com o app em Live.** A doc de webhooks da Meta afirma que
+  o app "must be set to **Live** in the App Dashboard for Meta to send webhook
+  notifications". Ou seja: mesmo para testar, se as mensagens não chegarem ao
+  seu webhook, o primeiro suspeito é o app ainda estar em modo de
+  desenvolvimento. Colocar em Live exige, no mínimo, **URL da política de
+  privacidade** e **categoria** em App settings → Basic.
+- **Acesso Standard vs. Avançado:** o Standard (padrão) serve para apps usados
+  só por quem tem papel no app, ou que atendem **a sua própria conta
+  profissional** — provavelmente suficiente para a sua loja, sem App Review.
+  O Avançado (App Review + verificação do negócio) é para atender contas que
+  você não administra.
 
 ## 3. Permissões (escopos)
 
