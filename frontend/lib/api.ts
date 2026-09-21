@@ -46,7 +46,7 @@ export interface Metrics {
 }
 
 export interface Chat {
-  phone_number: string;
+  external_id: string;
   agent_id: string;
   thread_id: string;
   last_message: string | null;
@@ -78,7 +78,7 @@ export interface ChatMessage {
 }
 
 export interface ChatMessagesResponse {
-  phone_number: string;
+  external_id: string;
   messages: ChatMessage[];
 }
 
@@ -88,7 +88,7 @@ export interface CalendarEvent {
   start: string;
   end: string;
   all_day: boolean;
-  phone: string | null;
+  external_id: string | null;
   patient_name: string | null;
 }
 
@@ -118,9 +118,9 @@ export const api = {
   chats: (limit = 20, offset = 0) =>
     request<ChatListResponse>(`/api/chats?limit=${limit}&offset=${offset}`),
 
-  chatMessages: (phone: string, limit = 50, offset = 0) =>
+  chatMessages: (externalId: string, limit = 50, offset = 0) =>
     request<ChatMessagesResponse>(
-      `/api/chats/${encodeURIComponent(phone)}?limit=${limit}&offset=${offset}`,
+      `/api/chats/${encodeURIComponent(externalId)}?limit=${limit}&offset=${offset}`,
     ),
 
   calendarEvents: (start: Date, end: Date) =>

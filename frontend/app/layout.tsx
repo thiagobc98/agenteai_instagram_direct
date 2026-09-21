@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WhatsApp LangChain — Admin",
-  description: "Painel administrativo do WhatsApp LangChain",
+  title: "Instagram Direct — Admin",
+  description: "Painel administrativo do atendimento no Instagram Direct",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

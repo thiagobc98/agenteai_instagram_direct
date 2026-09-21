@@ -67,8 +67,8 @@ export default function AppShell({
           <IconMenu size={20} />
         </button>
         <div className={styles.brand}>
-          <span className={styles.brandMark}>W</span>
-          <span>WhatsApp CRM</span>
+          <span className={styles.brandMark}>I</span>
+          <span>Instagram CRM</span>
         </div>
         <div className={styles.topbarUser}>
           <Avatar seed={user.username} size={30} />
@@ -77,8 +77,8 @@ export default function AppShell({
 
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
-          <span className={styles.brandMark}>W</span>
-          <span className={styles.navLabel}>WhatsApp CRM</span>
+          <span className={styles.brandMark}>I</span>
+          <span className={styles.navLabel}>Instagram CRM</span>
         </div>
 
         {nav}
@@ -100,8 +100,8 @@ export default function AppShell({
           <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
             <div className={styles.drawerHeader}>
               <div className={styles.brand}>
-                <span className={styles.brandMark}>W</span>
-                <span>WhatsApp CRM</span>
+                <span className={styles.brandMark}>I</span>
+                <span>Instagram CRM</span>
               </div>
               <button
                 className={styles.iconButton}

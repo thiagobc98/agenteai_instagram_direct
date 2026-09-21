@@ -10,7 +10,7 @@ import styles from "./ConversationList.module.css";
 
 export default function ConversationList({ className }: { className?: string }) {
   const pathname = usePathname();
-  const activePhone = pathname.startsWith("/chats/")
+  const activeExternalId = pathname.startsWith("/chats/")
     ? decodeURIComponent(pathname.replace("/chats/", ""))
     : null;
 
@@ -28,7 +28,7 @@ export default function ConversationList({ className }: { className?: string }) 
         <IconSearch size={16} className={styles.searchIcon} />
         <input
           className={styles.searchInput}
-          placeholder="Buscar por telefone ou mensagem..."
+          placeholder="Buscar por ID ou mensagem..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -45,7 +45,7 @@ export default function ConversationList({ className }: { className?: string }) 
             title={search ? "Nenhum resultado" : "Nenhuma conversa"}
             description={
               search
-                ? "Tente buscar por outro telefone ou termo."
+                ? "Tente buscar por outro ID ou termo."
                 : "Quando novas conversas chegarem, elas aparecerão aqui."
             }
           />
@@ -53,9 +53,9 @@ export default function ConversationList({ className }: { className?: string }) 
 
         {filteredChats.map((chat) => (
           <ConversationItem
-            key={`${chat.phone_number}:${chat.agent_id}`}
+            key={`${chat.external_id}:${chat.agent_id}`}
             chat={chat}
-            active={chat.phone_number === activePhone}
+            active={chat.external_id === activeExternalId}
           />
         ))}
 

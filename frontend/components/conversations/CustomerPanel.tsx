@@ -1,15 +1,15 @@
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatDateTime, formatPhone, relativeTime } from "../../lib/format";
+import { formatAgentName, formatDateTime, formatContactId, relativeTime } from "../../lib/format";
 import { IconX } from "../icons";
 import styles from "./CustomerPanel.module.css";
 
 export default function CustomerPanel({
-  phone,
+  externalId,
   chat,
   onClose,
 }: {
-  phone: string;
+  externalId: string;
   chat?: Chat;
   onClose: () => void;
 }) {
@@ -23,9 +23,9 @@ export default function CustomerPanel({
       </div>
 
       <div className={styles.profile}>
-        <Avatar seed={phone} size={72} />
-        <p className={styles.name}>{formatPhone(phone)}</p>
-        <p className="muted">{phone}</p>
+        <Avatar seed={externalId} size={72} />
+        <p className={styles.name}>{formatContactId(externalId)}</p>
+        <p className="muted">ID Instagram: {externalId}</p>
       </div>
 
       {!chat ? (

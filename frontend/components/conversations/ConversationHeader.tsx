@@ -1,17 +1,17 @@
 import Link from "next/link";
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatPhone, relativeTime } from "../../lib/format";
+import { formatAgentName, formatContactId, relativeTime } from "../../lib/format";
 import { IconArrowLeft, IconInfo } from "../icons";
 import styles from "./ConversationHeader.module.css";
 
 export default function ConversationHeader({
-  phone,
+  externalId,
   chat,
   infoOpen,
   onToggleInfo,
 }: {
-  phone: string;
+  externalId: string;
   chat?: Chat;
   infoOpen: boolean;
   onToggleInfo: () => void;
@@ -22,10 +22,10 @@ export default function ConversationHeader({
         <IconArrowLeft size={18} />
       </Link>
 
-      <Avatar seed={phone} size={40} />
+      <Avatar seed={externalId} size={40} />
 
       <div className={styles.info}>
-        <p className={styles.name}>{formatPhone(phone)}</p>
+        <p className={styles.name}>{formatContactId(externalId)}</p>
         <p className={styles.sub}>
           {chat ? (
             <>

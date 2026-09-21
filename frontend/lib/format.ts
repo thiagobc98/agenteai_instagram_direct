@@ -1,8 +1,14 @@
 // Utilitários de formatação para exibição de contatos, datas e mensagens
 // no Admin Panel. Todos os valores de entrada vêm de dados reais da API
-// (telefone E.164, timestamps ISO) — nada aqui inventa informação.
+// (ID do contato no Instagram, timestamps ISO) — nada aqui inventa informação.
 
-export function formatPhone(raw: string): string {
+// O contato é identificado pelo IGSID do Instagram (ID numérico, exibido como
+// está). Conversas antigas do WhatsApp têm o telefone E.164 ("+55...") como
+// identificador — para elas mantemos a formatação de telefone.
+export function formatContactId(raw: string): string {
+  const isLegacyPhone = raw.startsWith("+") || raw.startsWith("whatsapp:");
+  if (!isLegacyPhone) return raw;
+
   const digits = raw.replace(/^whatsapp:/, "").replace(/\D/g, "");
   if (!digits) return raw;
 

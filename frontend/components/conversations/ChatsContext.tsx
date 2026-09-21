@@ -17,7 +17,7 @@ interface ChatsContextValue {
   hasMore: boolean;
   loadMore: () => void;
   loadingMore: boolean;
-  findChat: (phone: string) => Chat | undefined;
+  findChat: (externalId: string) => Chat | undefined;
 }
 
 const ChatsContext = createContext<ChatsContextValue | null>(null);
@@ -68,7 +68,7 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     if (!term) return chats;
     return chats.filter(
       (chat) =>
-        chat.phone_number.toLowerCase().includes(term) ||
+        chat.external_id.toLowerCase().includes(term) ||
         (chat.last_message ?? "").toLowerCase().includes(term) ||
         chat.agent_id.toLowerCase().includes(term),
     );
@@ -79,8 +79,8 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     setLimit((prev) => prev + PAGE_SIZE);
   }
 
-  function findChat(phone: string) {
-    return chats.find((c) => c.phone_number === phone);
+  function findChat(externalId: string) {
+    return chats.find((c) => c.external_id === externalId);
   }
 
   const value: ChatsContextValue = {

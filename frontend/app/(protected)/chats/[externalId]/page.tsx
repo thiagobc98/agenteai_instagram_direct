@@ -14,8 +14,8 @@ import styles from "./page.module.css";
 const POLL_MS = 5_000;
 
 export default function ChatDetailPage() {
-  const params = useParams<{ phone: string }>();
-  const phone = decodeURIComponent(params.phone);
+  const params = useParams<{ externalId: string }>();
+  const externalId = decodeURIComponent(params.externalId);
   const { findChat } = useChats();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -30,7 +30,7 @@ export default function ChatDetailPage() {
 
     function fetchMessages() {
       api
-        .chatMessages(phone)
+        .chatMessages(externalId)
         .then((data) => {
           if (!cancelled) {
             setMessages(data.messages);
@@ -51,15 +51,15 @@ export default function ChatDetailPage() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [phone]);
+  }, [externalId]);
 
-  const chat = findChat(phone);
+  const chat = findChat(externalId);
 
   return (
     <div className={styles.wrap}>
       <div className={styles.conversation}>
         <ConversationHeader
-          phone={phone}
+          externalId={externalId}
           chat={chat}
           infoOpen={infoOpen}
           onToggleInfo={() => setInfoOpen((v) => !v)}
@@ -73,7 +73,7 @@ export default function ChatDetailPage() {
       </div>
 
       {infoOpen && (
-        <CustomerPanel phone={phone} chat={chat} onClose={() => setInfoOpen(false)} />
+        <CustomerPanel externalId={externalId} chat={chat} onClose={() => setInfoOpen(false)} />
       )}
     </div>
   );
