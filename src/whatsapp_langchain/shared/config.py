@@ -140,6 +140,11 @@ class Settings(BaseSettings):
     business_hour_end: int = 18
     appointment_duration_minutes: int = 30
 
+    # WhatsApp da atendente humana (Patrícia). Precisa ser o mesmo número que o
+    # prompt manda incluir em todo encaminhamento: o painel identifica "cliente
+    # encaminhado à Patrícia" pelas respostas do bot que contêm esses dígitos.
+    handoff_phone: str = "31993456562"
+
     # --- Notificações proativas (fora do ciclo normal de webhook) ---
     # ID Instagram (IGSID) da médica para receber a agenda do dia seguinte.
     # Vazio desabilita o aviso. Só é entregue dentro da janela de 24h após a

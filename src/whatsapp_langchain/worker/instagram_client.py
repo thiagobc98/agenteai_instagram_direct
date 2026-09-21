@@ -303,6 +303,44 @@ class InstagramClient:
         )
         return message_id
 
+    async def get_user_profile(self, igsid: str) -> dict[str, str | None] | None:
+        """Busca o perfil público de um contato (User Profile API, best-effort).
+
+        Só funciona para quem já enviou mensagem à conta. Falhas (token,
+        permissão, rede) retornam None: o painel cai para o ID numérico.
+
+        Returns:
+            Dict com `username`, `name` e `profile_pic_url`, ou None.
+        """
+        url = f"{self.base_url}/{self.api_version}/{igsid}"
+        try:
+            async with httpx.AsyncClient() as http:
+                response = await http.get(
+                    url,
+                    headers={"Authorization": self.headers["Authorization"]},
+                    params={"fields": "name,username,profile_pic"},
+                    timeout=8.0,
+                )
+        except Exception as exc:
+            logger.warning("instagram_profile_error", igsid=igsid, error=str(exc))
+            return None
+
+        if not response.is_success:
+            logger.warning(
+                "instagram_profile_failed",
+                igsid=igsid,
+                status_code=response.status_code,
+                detail=response.text[:200],
+            )
+            return None
+
+        data = response.json()
+        return {
+            "username": data.get("username") or None,
+            "name": data.get("name") or None,
+            "profile_pic_url": data.get("profile_pic") or None,
+        }
+
     async def _send_action(self, to: str, action: str) -> bool:
         """Envia um sender_action (best-effort): falha não interrompe o fluxo."""
         try:

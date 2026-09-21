@@ -16,6 +16,7 @@ import structlog
 from fastapi import APIRouter, Query
 
 from whatsapp_langchain.agents.loader import list_agents
+from whatsapp_langchain.shared.analytics import build_dashboard
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
 from whatsapp_langchain.shared.google_calendar import (
@@ -57,10 +58,12 @@ async def get_chats(
     async with pool.connection() as conn:
         cursor = await conn.execute(
             """
-            SELECT external_id, agent_id, thread_id, last_message,
-                   last_message_at, message_count, created_at
-            FROM conversations
-            ORDER BY last_message_at DESC
+            SELECT v.external_id, v.agent_id, v.thread_id, v.last_message,
+                   v.last_message_at, v.message_count, v.created_at,
+                   c.username, c.name, c.profile_pic_url
+            FROM conversations v
+            LEFT JOIN contacts c ON c.external_id = v.external_id
+            ORDER BY v.last_message_at DESC
             LIMIT %s OFFSET %s
             """,
             (limit, offset),
@@ -81,6 +84,9 @@ async def get_chats(
             "last_message_at": row[4].isoformat() if row[4] else None,
             "message_count": row[5],
             "created_at": row[6].isoformat() if row[6] else None,
+            "username": row[7],
+            "name": row[8],
+            "profile_pic_url": row[9],
         }
         for row in rows
     ]
@@ -122,6 +128,15 @@ async def get_chat_messages(
         )
         rows = await cursor.fetchall()
 
+        cursor = await conn.execute(
+            """
+            SELECT username, name, profile_pic_url
+            FROM contacts WHERE external_id = %s
+            """,
+            (external_id,),
+        )
+        contact = await cursor.fetchone()
+
     messages = [
         {
             "id": row[0],
@@ -140,7 +155,35 @@ async def get_chat_messages(
         for row in rows
     ]
 
-    return {"external_id": external_id, "messages": messages}
+    return {
+        "external_id": external_id,
+        "username": contact[0] if contact else None,
+        "name": contact[1] if contact else None,
+        "profile_pic_url": contact[2] if contact else None,
+        "messages": messages,
+    }
+
+
+@router.get("/dashboard")
+async def get_dashboard(
+    days: int = Query(default=14, ge=7, le=90),
+) -> dict:
+    """Indicadores de negócio da loja para o dashboard.
+
+    Leads novos, clientes encaminhados à Patrícia, séries por dia, horários de
+    pico, assuntos mais perguntados e mix de mensagens (ver
+    `shared/analytics.py` para as definições).
+
+    Args:
+        days: Janela do período em dias (7-90). Default: 14.
+    """
+    pool = await get_pool()
+    return await build_dashboard(
+        pool,
+        days=days,
+        timezone=settings.business_timezone,
+        handoff_phone=settings.handoff_phone,
+    )
 
 
 @router.get("/metrics")

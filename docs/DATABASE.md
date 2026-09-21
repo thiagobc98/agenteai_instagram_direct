@@ -40,6 +40,15 @@ Campos principais:
 
 Resumo por conversa (`external_id + agent_id`) para o painel/admin. Tem também `channel`.
 
+### `contacts`
+
+Perfil público de cada cliente do Instagram (`external_id`, `username`, `name`,
+`profile_pic_url`, `fetched_at`), criado pela migration `007`. O webhook só traz o
+IGSID; o Worker consulta a User Profile API na primeira mensagem do contato (e renova
+a cada 7 dias) para o painel mostrar o `@` em vez do número. Falha na consulta nunca
+interrompe o atendimento (best-effort). O dashboard (`GET /api/dashboard`,
+`shared/analytics.py`) lê `message_queue` + `contacts`.
+
 ### `appointment_reminders`
 
 Lembretes de consulta já enviados (`event_id`, `external_id`, `appointment_start`).

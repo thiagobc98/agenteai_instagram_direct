@@ -23,6 +23,10 @@ from whatsapp_langchain.shared.db import (
 )
 from whatsapp_langchain.shared.observability import setup_logging
 from whatsapp_langchain.worker.consumer import claim_next_message
+from whatsapp_langchain.worker.contacts import (
+    backfill_contact_profiles,
+    ensure_contact_profile,
+)
 from whatsapp_langchain.worker.instagram_client import InstagramClient
 from whatsapp_langchain.worker.notifications import (
     notify_doctor_tomorrow_schedule,
@@ -90,6 +94,9 @@ async def main() -> None:
     last_reminder_date = None
     last_doctor_summary_date = None
 
+    # Contatos que conversaram antes do painel mostrar o @username
+    await backfill_contact_profiles(pool, instagram)
+
     try:
         while True:
             now = datetime.now(ZoneInfo(settings.business_timezone))
@@ -115,6 +122,9 @@ async def main() -> None:
             if message is None:
                 await asyncio.sleep(settings.poll_interval_seconds)
                 continue
+
+            # Perfil (@username) do cliente para o painel — best-effort
+            await ensure_contact_profile(pool, instagram, message.external_id)
 
             await process_message(
                 message,
