@@ -148,15 +148,12 @@ consciente desta implementação — ajuste `find_events_by_external_id` em
 
 ## 6. Limitações conhecidas
 
-- **Lembretes e a janela de 24h do Instagram**: o lembrete de consulta e o
-  resumo da médica só são entregues a quem escreveu para a conta nas últimas
-  24h; fora disso o envio é pulado e registrado em log
-  (`patient_reminder_skipped_outside_window`). Um paciente que agendou dias
-  antes e não voltou a escrever **não recebe** o lembrete. Veja
-  [INSTAGRAM_API.md](INSTAGRAM_API.md).
+- **Sem lembretes automáticos**: o projeto não envia lembrete de consulta nem
+  resumo da agenda (mensagens proativas ficam sujeitas à janela de 24h do
+  Instagram; veja [INSTAGRAM_API.md](INSTAGRAM_API.md)).
 - **Eventos antigos (WhatsApp)**: eventos criados antes da migração guardam o
   telefone em `extendedProperties.private.phone`; eles aparecem no painel, mas
-  as tools do agente e os lembretes só reconhecem `external_id`.
+  as tools do agente só reconhecem `external_id`.
 
 - **Sem lock de concorrência**: se dois pacientes tentarem marcar o mesmo
   horário ao mesmo tempo, ambos podem passar a checagem de disponibilidade

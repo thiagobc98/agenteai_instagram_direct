@@ -20,7 +20,6 @@ Implementado:
 - envio real de resposta via Instagram Messaging API (Graph API) no worker
 - validação do webhook: handshake `hub.verify_token` (GET) e assinatura `X-Hub-Signature-256` (POST)
 - mídia por URL (attachments do Instagram) baixada no worker
-- notificações proativas sujeitas à janela de 24h do Instagram
 - rate limit distribuído via Redis (sliding window, compartilhado entre réplicas)
 - autenticação do admin panel (login + cookie de sessão assinado)
 - APIs administrativas para inspeção, protegidas por sessão de admin
@@ -79,7 +78,6 @@ Responsabilidades:
 - invocar grafo com `thread_id` e `user_id`
 - enviar a resposta pelo Instagram (`InstagramClient`: `mark_seen`, `typing_on`, texto em blocos de até 1000 bytes)
 - persistir sucesso/falha
-- disparar as notificações diárias (lembretes e resumo), respeitando a janela de 24h
 
 Contrato de execução do agente:
 - `thread_id`: memória de conversa (checkpointer)
@@ -173,10 +171,9 @@ Agrupa mensagens enviadas em sequência curta (`MESSAGE_BUFFER_SECONDS`) para re
 ### Janela de 24h do Instagram
 
 O Instagram só permite enviar mensagem a quem escreveu para a conta nas
-últimas 24h. Respostas ao cliente ficam sempre dentro da janela; as
-notificações proativas (`worker/notifications.py`) consultam a última mensagem
-recebida do destinatário (`get_last_inbound_at`) e **pulam o envio, com log**,
-quando a janela expirou. Detalhes em [INSTAGRAM_API.md](INSTAGRAM_API.md).
+últimas 24h. Respostas ao cliente ficam sempre dentro da janela, e o projeto
+não envia mensagens proativas. Se um dia precisar, `get_last_inbound_at` e
+`is_within_messaging_window` permitem checar a janela antes de enviar. Detalhes em [INSTAGRAM_API.md](INSTAGRAM_API.md).
 
 ### Autenticação do Admin Panel
 

@@ -145,18 +145,6 @@ class Settings(BaseSettings):
     # encaminhado à Patrícia" pelas respostas do bot que contêm esses dígitos.
     handoff_phone: str = "31993456562"
 
-    # --- Notificações proativas (fora do ciclo normal de webhook) ---
-    # ID Instagram (IGSID) da médica para receber a agenda do dia seguinte.
-    # Vazio desabilita o aviso. Só é entregue dentro da janela de 24h após a
-    # última mensagem que ela enviou à conta (ver docs/INSTAGRAM_API.md).
-    doctor_instagram_id: str = ""
-    # Hora (0-23, fuso business_timezone) em que os pacientes com consulta
-    # no dia seguinte recebem o lembrete de confirmação.
-    patient_reminder_hour: int = 9
-    # Hora (0-23, fuso business_timezone) em que a médica recebe o resumo
-    # fixo com a agenda do dia seguinte.
-    doctor_summary_hour: int = 20
-
 
 # Singleton — importar de qualquer lugar do projeto
 settings = Settings()

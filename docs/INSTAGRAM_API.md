@@ -242,18 +242,12 @@ FROM conversations ORDER BY last_message_at DESC LIMIT 5;
 
 Só é possível enviar mensagem a quem escreveu para a conta nas **últimas 24
 horas**. Como respondemos logo após receber, o fluxo normal está sempre dentro
-da janela. A regra pesa nas **notificações proativas** (`worker/notifications.py`):
+da janela. O projeto hoje **não envia mensagens proativas** (só responde a quem escreveu), então o fluxo fica sempre dentro da janela.
 
-- **Lembrete de consulta ao paciente** e **agenda do dia à médica** só são
-  enviados se o destinatário escreveu para a conta nas últimas 24h. A checagem
-  usa a última mensagem recebida (`message_queue.created_at`).
-- Fora da janela a mensagem **não é enviada** e o motivo vai para o log:
-  `patient_reminder_skipped_outside_window` /
-  `doctor_notification_skipped_outside_window`. O lembrete não é marcado como
-  enviado; uma nova execução no mesmo dia tenta de novo.
-- Na prática, com o Worker rodando o lembrete uma vez por dia, ele só chega a
-  quem falou com a conta nas 24h anteriores. Um lembrete "frio" (paciente que
-  agendou dias antes e não escreveu desde então) **não é entregue**.
+Se um dia for preciso enviar algo por iniciativa própria, a última mensagem
+recebida do contato (`get_last_inbound_at`, baseada em
+`message_queue.created_at`) e `is_within_messaging_window` (com margem de
+segurança) permitem checar a janela antes de enviar.
 
 Se o Instagram recusar o envio por janela expirada, o cliente lança
 `InstagramSendError` com `is_window_closed=True` (log `instagram_window_closed`).
@@ -322,7 +316,7 @@ Todo erro de envio levanta `InstagramSendError` e cai no retry padrão da fila
 ## 10. Identidade e histórico
 
 - O `external_id` (IGSID) é a chave em `message_queue`, `conversations`,
-  `appointment_reminders`, no `thread_id` (`{external_id}:{agent_id}`) e no
+  no `thread_id` (`{external_id}:{agent_id}`) e no
   namespace da memória semântica.
 - A migration `006_instagram_identity.sql` renomeia as colunas e marca o
   histórico do WhatsApp com `channel = 'whatsapp'`. Os contatos do Instagram
@@ -331,7 +325,7 @@ Todo erro de envio levanta `InstagramSendError` e cai no retry padrão da fila
 - Consultas dos pacientes na agenda passam a usar
   `extendedProperties.private.external_id`. Eventos criados antes da migração
   (com `phone`) continuam aparecendo no painel, mas **não** são encontrados
-  pelas tools do agente nem recebem lembrete.
+  pelas tools do agente.
 
 ## 11. Solução de problemas
 

@@ -8,8 +8,6 @@ Uso:
 """
 
 import asyncio
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 import structlog
 
@@ -28,10 +26,6 @@ from whatsapp_langchain.worker.contacts import (
     ensure_contact_profile,
 )
 from whatsapp_langchain.worker.instagram_client import InstagramClient
-from whatsapp_langchain.worker.notifications import (
-    notify_doctor_tomorrow_schedule,
-    send_patient_reminders,
-)
 from whatsapp_langchain.worker.processor import process_message
 
 logger = structlog.get_logger()
@@ -84,39 +78,11 @@ async def main() -> None:
         memory_enabled=store is not None,
     )
 
-    # Data do último envio dos lembretes diários aos pacientes / resumo da
-    # médica (None até o primeiro disparo de cada um) — garante um envio
-    # por dia mesmo com o loop rodando a cada poll_interval_seconds;
-    # reenvios de lembrete são seguros graças à tabela appointment_reminders
-    # (idempotente); o resumo da médica não tem dedup — reenviar o mesmo dia
-    # é inofensivo (mesma mensagem), mas o gate por data evita reenviar a
-    # cada segundo.
-    last_reminder_date = None
-    last_doctor_summary_date = None
-
     # Contatos que conversaram antes do painel mostrar o @username
     await backfill_contact_profiles(pool, instagram)
 
     try:
         while True:
-            now = datetime.now(ZoneInfo(settings.business_timezone))
-
-            reminder_due = now.hour >= settings.patient_reminder_hour
-            if reminder_due and last_reminder_date != now.date():
-                last_reminder_date = now.date()
-                try:
-                    await send_patient_reminders(pool, instagram)
-                except Exception as exc:
-                    logger.error("patient_reminders_tick_failed", error=str(exc))
-
-            summary_due = now.hour >= settings.doctor_summary_hour
-            if summary_due and last_doctor_summary_date != now.date():
-                last_doctor_summary_date = now.date()
-                try:
-                    await notify_doctor_tomorrow_schedule(pool, instagram)
-                except Exception as exc:
-                    logger.error("doctor_summary_tick_failed", error=str(exc))
-
             message = await claim_next_message(pool, settings.lease_seconds)
 
             if message is None:

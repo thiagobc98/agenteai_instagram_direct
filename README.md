@@ -36,7 +36,7 @@ Meta ──POST /webhook/instagram (assinado com X-Hub-Signature-256)──► A
 - **API** (`server/`): responde ao handshake da Meta, valida a assinatura,
   aplica rate limit por contato e enfileira. Nunca executa o agente inline.
 - **Worker** (`worker/`): consome a fila, baixa mídia (URL), roda o agente e
-  envia a resposta pelo Instagram. Também dispara os lembretes diários.
+  envia a resposta pelo Instagram.
 - **Admin Panel** (`frontend/`, Next.js): dashboard, conversas e agenda.
 
 O contato é identificado pelo **IGSID** (ID do usuário no escopo do app), que
@@ -46,9 +46,7 @@ o código chama de `external_id`.
 
 - **Janela de 24h:** o Instagram só permite enviar mensagem a quem escreveu
   para a conta nas últimas 24h. As respostas do agente ficam sempre dentro da
-  janela, mas **lembretes proativos** (consulta amanhã, resumo da médica) só
-  chegam a quem falou com a conta nas 24h anteriores — fora disso são pulados e
-  registrados em log. Detalhes em [docs/INSTAGRAM_API.md](docs/INSTAGRAM_API.md).
+  janela, e o projeto não envia mensagens proativas. Detalhes em [docs/INSTAGRAM_API.md](docs/INSTAGRAM_API.md).
 - **Só texto simples**, até 1000 bytes por mensagem (o cliente divide
   respostas longas e remove markdown).
 - **App Review da Meta:** para atender clientes reais, o app precisa sair do
@@ -99,7 +97,7 @@ Crie o app no Meta for Developers, gere o token, configure o webhook
 ├── src/whatsapp_langchain/   # (nome do pacote mantido — ver "Pendências")
 │   ├── agents/        # Catálogo de agentes, middleware e tools
 │   ├── server/        # API FastAPI (webhook Instagram + auth + admin APIs)
-│   ├── worker/        # Consumidor da fila, cliente Instagram, mídia, notificações
+│   ├── worker/        # Consumidor da fila, cliente Instagram, mídia, perfil dos contatos
 │   └── shared/        # Config, DB, Redis, fila, modelos, parser do payload
 ├── frontend/          # Admin Panel (Next.js)
 ├── db/migrations/     # Schema SQL (fila, conversas, identidade Instagram)

@@ -122,7 +122,7 @@ Toda a lógica de fila em PostgreSQL, usada pela API (produtor) e pelo Worker (c
 - `claim_next()`: consulta atômica com `FOR UPDATE SKIP LOCKED` que reserva a próxima mensagem elegível (`queued` com `process_after` vencido, ou `processing` com lease expirado) para um worker — permite múltiplos workers concorrentes sem duplicar processamento. Também recupera mensagens presas (`processing` com lease vencido e sem tentativas restantes) marcando-as como `failed`.
 - `mark_done()` / `mark_failed()`: finalizam o ciclo de vida da mensagem. `mark_failed` decide entre **retry com backoff** (`attempts * 5` segundos) ou falha definitiva, conforme `max_attempts`.
 - `upsert_conversation()`: mantém a tabela `conversations` atualizada (usada pelo Admin Panel).
-- `get_last_inbound_at()`: última mensagem recebida de um contato (`MAX(created_at)` em `message_queue`) — base da regra de 24h do Instagram usada pelas notificações proativas.
+- `get_last_inbound_at()`: última mensagem recebida de um contato (`MAX(created_at)` em `message_queue`) — base da regra de 24h do Instagram (hoje sem uso: o projeto não envia mensagens proativas).
 
 #### `shared/instagram_payload.py`
 Parser **puro** (sem I/O) do payload de webhook da Instagram Messaging API: `parse_instagram_messages()` extrai as mensagens de `entry[].messaging[]` (e do formato `entry[].changes[].value` do botão "Testar" do painel da Meta). Ignora ecos (`is_echo`), mensagens da própria conta, apagadas, leituras, reações e o coração (`like_heart`); anexos de imagem/áudio viram `media_url` + `media_type` genérico (`image/*`, `audio/*`), e os demais tipos (vídeo, share, reel…) viram `unsupported/<tipo>` para o Worker responder automaticamente. É o único lugar que interpreta o formato da Meta.
@@ -218,7 +218,7 @@ Marcadores de pacote.
 ### 3.4 `worker/` — processador assíncrono da fila
 
 #### `worker/main.py`
-Entry point (`python -m whatsapp_langchain.worker.main`). Faz o boot completo: logging → pool Postgres → migrações → abre `checkpointer`/`store` (uma única vez, reutilizados por todas as mensagens) → valida o token do Instagram **obrigatório** (fail-fast com `SystemExit` se faltar `INSTAGRAM_ACCESS_TOKEN`) → cria o `InstagramClient` → entra em loop infinito: dispara os lembretes diários quando é a hora (`send_patient_reminders`/`notify_doctor_tomorrow_schedule`), depois `claim_next_message()` e, se houver mensagem, `process_message()`; se a fila estiver vazia, dorme `poll_interval_seconds`. No shutdown (`KeyboardInterrupt` ou erro), fecha store/checkpointer/pool corretamente via `AsyncExitStack`.
+Entry point (`python -m whatsapp_langchain.worker.main`). Faz o boot completo: logging → pool Postgres → migrações → abre `checkpointer`/`store` (uma única vez, reutilizados por todas as mensagens) → valida o token do Instagram **obrigatório** (fail-fast com `SystemExit` se faltar `INSTAGRAM_ACCESS_TOKEN`) → cria o `InstagramClient` → preenche o perfil (@username) dos contatos que ainda não têm (`backfill_contact_profiles`) → entra em loop infinito: `claim_next_message()` e, se houver mensagem, `process_message()`; se a fila estiver vazia, dorme `poll_interval_seconds`. No shutdown (`KeyboardInterrupt` ou erro), fecha store/checkpointer/pool corretamente via `AsyncExitStack`.
 
 #### `worker/consumer.py`
 Wrapper fino sobre `shared.queue.claim_next()` com logging contextual do Worker (`queue_empty` em debug quando não há mensagens).
@@ -244,10 +244,10 @@ Qualquer exceção durante o download/chamada cai em `media_processing_status="f
 Cliente HTTP assíncrono (via `httpx`) para a **Instagram Messaging API** (Graph API): `POST {base}/{versão}/me/messages` com `Authorization: Bearer <token>`. Métodos:
 - `send_message(to, body)`: converte o texto para texto puro (o Instagram não renderiza markdown), divide em mensagens de até 1000 bytes UTF-8 (parágrafo → linha → palavra) e envia em sequência; retorna o `message_id` da última. Levanta `InstagramSendError` em falha HTTP, com classificação do erro Graph (token inválido/expirado, fora da janela de 24h, rate limit) e log dedicado.
 - `send_typing(to)` / `mark_seen(to)`: `sender_action` `typing_on`/`mark_seen` (best-effort: falhas retornam `False`, sem exceção).
-- `is_within_messaging_window(last_inbound_at)`: regra de 24h do Instagram (com margem de segurança), usada pelas notificações proativas.
+- `is_within_messaging_window(last_inbound_at)`: regra de 24h do Instagram (com margem de segurança), hoje sem uso.
 
-#### `worker/notifications.py`
-Notificações **proativas** (por iniciativa do sistema, fora do ciclo de webhook), disparadas uma vez por dia pelo loop do Worker: lembrete de consulta a cada paciente com consulta amanhã e resumo da agenda para a médica. Como o Instagram só permite enviar a quem escreveu nas últimas 24h, cada envio é precedido de uma checagem (`get_last_inbound_at`); fora da janela a notificação **não é enviada** e o motivo vai para o log (`*_skipped_outside_window`). Nunca propaga exceção.
+#### `worker/contacts.py`
+Mantém o perfil dos contatos (`@username`, nome e foto) na tabela `contacts`: `ensure_contact_profile()` consulta a User Profile API na primeira mensagem do contato (e renova a cada 7 dias) e `backfill_contact_profiles()` preenche quem conversou antes. É best-effort: nunca propaga exceção.
 
 #### `worker/__init__.py`
 Marcador de pacote.
@@ -268,7 +268,7 @@ Migração incremental: adiciona `normalized_input`, `media_processing_status`, 
 ### `db/migrations/003` a `006`
 - `003_evolution_media.sql`: coluna `media_base64` (época do Evolution API; histórico).
 - `004_rename_rhawk_assistant_to_secretaria.sql`: renomeia o agente nas tabelas de aplicação e do checkpointer.
-- `005_appointment_reminders.sql`: tabela `appointment_reminders` (lembretes de consulta já enviados).
+- `005_appointment_reminders.sql`: tabela `appointment_reminders` (lembretes de consulta; sem uso desde a remoção dos lembretes automáticos).
 - `006_instagram_identity.sql`: generaliza a identidade — `phone_number` → `external_id` (IGSID) em `message_queue`, `conversations` e `appointment_reminders`; `to_number` → `to_id`; adiciona `channel` (linhas antigas ficam `whatsapp`, novas nascem `instagram`); renomeia o índice/constraint e cria `idx_queue_external_created` (janela de 24h). Preserva todos os dados existentes.
 
 ### `db/migrate.py`
@@ -349,7 +349,6 @@ Fixtures globais do pytest: carrega `.env`, define `sample_messages` (conversa d
 - `test_memory_tool.py` — `agents/tools/memory.py` (`save_memory`/`read_memory` com store fake).
 - `test_models.py` — validação dos modelos Pydantic (`shared/models.py`).
 - `test_processor.py` — `worker/processor.py` (envio pelo Instagram obrigatório antes de `mark_done`, mark_seen/typing, mídia por URL).
-- `test_notifications.py` — lembretes e resumo da médica, incluindo a regra de 24h.
 - `test_media_url.py` — download de mídia por URL (https, tamanho, expiração) e pré-processamento de attachments.
 - `test_queue_claim.py` — `claim_next` (concorrência, `FOR UPDATE SKIP LOCKED`, lease expirado).
 - `test_queue_retry.py` — `mark_failed` (backoff progressivo, falha definitiva).

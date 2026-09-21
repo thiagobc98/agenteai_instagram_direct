@@ -51,7 +51,7 @@ interrompe o atendimento (best-effort). O dashboard (`GET /api/dashboard`,
 
 ### `appointment_reminders`
 
-Lembretes de consulta já enviados (`event_id`, `external_id`, `appointment_start`).
+Lembretes de consulta já enviados (`event_id`, `external_id`, `appointment_start`). Sem uso desde a remoção dos lembretes automáticos; a tabela fica só por histórico de migrations.
 
 ## Tabelas do LangGraph
 
