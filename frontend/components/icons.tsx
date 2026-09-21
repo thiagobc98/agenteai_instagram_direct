@@ -213,3 +213,39 @@ export const IconCross = (p: IconProps = {}) =>
     </>,
     p,
   );
+
+export const IconUserPlus = (p: IconProps = {}) =>
+  base(
+    <>
+      <circle cx="9.5" cy="8" r="3.5" />
+      <path d="M3 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M19 8v6M16 11h6" />
+    </>,
+    p,
+  );
+
+export const IconPhone = (p: IconProps = {}) =>
+  base(
+    <path d="M21 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 1.1 4.2 2 2 0 0 1 3.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L7.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />,
+    p,
+  );
+
+export const IconRepeat = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a3 3 0 0 1-3 3H3" />
+    </>,
+    p,
+  );
+
+export const IconTrendUp = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+      <path d="M16 7h6v6" />
+    </>,
+    p,
+  );

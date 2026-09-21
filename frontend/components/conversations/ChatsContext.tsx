@@ -69,6 +69,8 @@ export function ChatsProvider({ children }: { children: React.ReactNode }) {
     return chats.filter(
       (chat) =>
         chat.external_id.toLowerCase().includes(term) ||
+        (chat.username ?? "").toLowerCase().includes(term.replace(/^@/, "")) ||
+        (chat.name ?? "").toLowerCase().includes(term) ||
         (chat.last_message ?? "").toLowerCase().includes(term) ||
         chat.agent_id.toLowerCase().includes(term),
     );

@@ -1,6 +1,6 @@
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatDateTime, formatContactId, relativeTime } from "../../lib/format";
+import { contactLabel, formatAgentName, formatDateTime, relativeTime } from "../../lib/format";
 import { IconX } from "../icons";
 import styles from "./CustomerPanel.module.css";
 
@@ -23,9 +23,22 @@ export default function CustomerPanel({
       </div>
 
       <div className={styles.profile}>
-        <Avatar seed={externalId} size={72} />
-        <p className={styles.name}>{formatContactId(externalId)}</p>
+        <Avatar seed={externalId} size={72} src={chat?.profile_pic_url} />
+        <p className={styles.name}>
+          {chat ? contactLabel(chat) : contactLabel({ external_id: externalId })}
+        </p>
+        {chat?.name && chat.username && <p className="muted">{chat.name}</p>}
         <p className="muted">ID Instagram: {externalId}</p>
+        {chat?.username && (
+          <a
+            href={`https://instagram.com/${chat.username}`}
+            target="_blank"
+            rel="noreferrer"
+            className="muted"
+          >
+            Abrir perfil no Instagram
+          </a>
+        )}
       </div>
 
       {!chat ? (

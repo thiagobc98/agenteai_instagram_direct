@@ -53,6 +53,9 @@ export interface Chat {
   last_message_at: string | null;
   message_count: number;
   created_at: string | null;
+  username: string | null;
+  name: string | null;
+  profile_pic_url: string | null;
 }
 
 export interface ChatListResponse {
@@ -79,7 +82,56 @@ export interface ChatMessage {
 
 export interface ChatMessagesResponse {
   external_id: string;
+  username: string | null;
+  name: string | null;
+  profile_pic_url: string | null;
   messages: ChatMessage[];
+}
+
+export interface DailyPoint {
+  date: string;
+  messages: number;
+  contacts: number;
+  new_leads: number;
+  handoffs: number;
+  handoff_contacts: number;
+}
+
+export interface HandoffContact {
+  external_id: string;
+  username: string | null;
+  name: string | null;
+  profile_pic_url: string | null;
+  last_message: string | null;
+  at: string | null;
+}
+
+export interface Dashboard {
+  period_days: number;
+  timezone: string;
+  generated_at: string;
+  handoff_enabled: boolean;
+  today: DailyPoint;
+  yesterday: DailyPoint | null;
+  period: {
+    messages: number;
+    contacts: number;
+    new_leads: number;
+    returning_contacts: number;
+    handoff_messages: number;
+    handoff_contacts: number;
+    handoff_contact_rate: number;
+    ai_only_rate: number;
+    answered_messages: number;
+    failures: number;
+    total_contacts: number;
+  };
+  daily: DailyPoint[];
+  by_hour: number[];
+  by_weekday: number[];
+  media: { text: number; image: number; audio: number };
+  topics: { key: string; label: string; count: number }[];
+  handoff_queue: HandoffContact[];
 }
 
 export const api = {
@@ -94,6 +146,8 @@ export const api = {
   me: () => request<AdminUser>("/api/auth/me"),
 
   metrics: () => request<Metrics>("/api/metrics"),
+
+  dashboard: (days = 14) => request<Dashboard>(`/api/dashboard?days=${days}`),
 
   agents: () => request<{ agents: string[] }>("/api/agents"),
 

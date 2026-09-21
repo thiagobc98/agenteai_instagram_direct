@@ -43,7 +43,7 @@ export default function LoginPage() {
           />
           <div>
             <h1 className={styles.title}>Patricia Berberich</h1>
-            <p className={styles.subtitle}>Painel administrativo</p>
+            <p className={styles.subtitle}>Central de atendimento</p>
           </div>
         </div>
 

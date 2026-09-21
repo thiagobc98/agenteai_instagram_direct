@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { AdminUser } from "../lib/api";
@@ -20,6 +21,25 @@ const NAV_ITEMS = [
   { href: "/chats", label: "Conversas", icon: IconChats },
   { href: "/agents", label: "Agentes", icon: IconAgents },
 ];
+
+function Brand() {
+  return (
+    <div className={styles.brand}>
+      <Image
+        src="/logo-loja.jpg"
+        alt="Logo Patricia Berberich"
+        width={38}
+        height={38}
+        unoptimized
+        className={styles.brandLogo}
+      />
+      <div className={styles.navLabel}>
+        <p className={styles.brandName}>Central Berberich</p>
+        <p className={styles.brandSub}>Atendimento Instagram</p>
+      </div>
+    </div>
+  );
+}
 
 export default function AppShell({
   user,
@@ -64,20 +84,14 @@ export default function AppShell({
         >
           <IconMenu size={20} />
         </button>
-        <div className={styles.brand}>
-          <span className={styles.brandMark}>I</span>
-          <span>Instagram CRM</span>
-        </div>
+        <Brand />
         <div className={styles.topbarUser}>
           <Avatar seed={user.username} size={30} />
         </div>
       </header>
 
       <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <span className={styles.brandMark}>I</span>
-          <span className={styles.navLabel}>Instagram CRM</span>
-        </div>
+        <Brand />
 
         {nav}
 
@@ -97,10 +111,7 @@ export default function AppShell({
         <div className={styles.overlay} onClick={() => setMobileOpen(false)}>
           <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
             <div className={styles.drawerHeader}>
-              <div className={styles.brand}>
-                <span className={styles.brandMark}>I</span>
-                <span>Instagram CRM</span>
-              </div>
+              <Brand />
               <button
                 className={styles.iconButton}
                 onClick={() => setMobileOpen(false)}

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Instagram Direct — Admin",
-  description: "Painel administrativo do atendimento no Instagram Direct",
+  title: "Central Berberich",
+  description: "Central de atendimento da loja Patricia Berberich no Instagram Direct",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

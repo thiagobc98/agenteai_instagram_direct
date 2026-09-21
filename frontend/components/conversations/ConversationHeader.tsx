@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatContactId, relativeTime } from "../../lib/format";
+import { contactLabel, formatAgentName, relativeTime } from "../../lib/format";
 import { IconArrowLeft, IconInfo } from "../icons";
 import styles from "./ConversationHeader.module.css";
 
@@ -22,13 +22,16 @@ export default function ConversationHeader({
         <IconArrowLeft size={18} />
       </Link>
 
-      <Avatar seed={externalId} size={40} />
+      <Avatar seed={externalId} size={40} src={chat?.profile_pic_url} />
 
       <div className={styles.info}>
-        <p className={styles.name}>{formatContactId(externalId)}</p>
+        <p className={styles.name}>
+          {chat ? contactLabel(chat) : contactLabel({ external_id: externalId })}
+        </p>
         <p className={styles.sub}>
           {chat ? (
             <>
+              {chat.name ? `${chat.name} · ` : ""}
               {formatAgentName(chat.agent_id)} · última atividade {relativeTime(chat.last_message_at)}
             </>
           ) : (

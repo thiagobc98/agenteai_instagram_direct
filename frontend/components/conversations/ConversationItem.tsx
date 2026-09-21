@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatContactId, relativeTime } from "../../lib/format";
+import { contactLabel, formatAgentName, relativeTime } from "../../lib/format";
 import styles from "./ConversationItem.module.css";
 
 export default function ConversationItem({
@@ -16,10 +16,10 @@ export default function ConversationItem({
       href={`/chats/${encodeURIComponent(chat.external_id)}`}
       className={`${styles.item} ${active ? styles.active : ""}`}
     >
-      <Avatar seed={chat.external_id} size={44} />
+      <Avatar seed={chat.external_id} size={44} src={chat.profile_pic_url} />
       <div className={styles.body}>
         <div className={styles.row}>
-          <span className={styles.name}>{formatContactId(chat.external_id)}</span>
+          <span className={styles.name}>{contactLabel(chat)}</span>
           <span className={styles.time}>{relativeTime(chat.last_message_at)}</span>
         </div>
         <div className={styles.row}>

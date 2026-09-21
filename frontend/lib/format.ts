@@ -94,3 +94,50 @@ export function formatTime(iso: string | null): string {
   if (!iso) return "-";
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
+
+// ---------- Contatos (perfil do Instagram) ----------
+
+interface ContactLike {
+  external_id: string;
+  username?: string | null;
+  name?: string | null;
+}
+
+// Nome principal do contato: @usuario quando o perfil é conhecido; senão o
+// nome de exibição; por último o ID numérico.
+export function contactLabel(contact: ContactLike): string {
+  if (contact.username) return `@${contact.username}`;
+  if (contact.name) return contact.name;
+  return formatContactId(contact.external_id);
+}
+
+// ---------- Números e datas do dashboard ----------
+
+export function formatNumber(value: number): string {
+  return value.toLocaleString("pt-BR");
+}
+
+export function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "-";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const min = Math.floor(seconds / 60);
+  const sec = Math.round(seconds % 60);
+  return sec ? `${min}min ${sec}s` : `${min}min`;
+}
+
+export const WEEKDAYS_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+export const WEEKDAYS_LONG = [
+  "domingo",
+  "segunda-feira",
+  "terça-feira",
+  "quarta-feira",
+  "quinta-feira",
+  "sexta-feira",
+  "sábado",
+];
+
+// "2026-09-21" -> "21/09" (sem passar por Date: evita erro de fuso).
+export function formatShortDate(isoDate: string): string {
+  const [, month, day] = isoDate.split("-");
+  return `${day}/${month}`;
+}

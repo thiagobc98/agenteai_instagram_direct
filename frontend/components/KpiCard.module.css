@@ -1,0 +1,83 @@
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.iconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brand {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.gold {
+  background: var(--gold-light);
+  color: #8a6a35;
+}
+
+.blue {
+  background: #e3edf7;
+  color: #2f5d8a;
+}
+
+.danger {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.body {
+  min-width: 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.83rem;
+}
+
+.value {
+  margin: 0.1rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+
+.foot {
+  margin: 0.3rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.76rem;
+}
+
+.delta {
+  font-weight: 600;
+}
+
+.up {
+  color: #15803d;
+}
+
+.down {
+  color: var(--danger);
+}
+
+.flat {
+  color: var(--text-tertiary);
+}
+
+.hint {
+  color: var(--text-tertiary);
+}

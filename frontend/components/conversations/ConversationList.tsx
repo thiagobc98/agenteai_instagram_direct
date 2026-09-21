@@ -28,7 +28,7 @@ export default function ConversationList({ className }: { className?: string }) 
         <IconSearch size={16} className={styles.searchIcon} />
         <input
           className={styles.searchInput}
-          placeholder="Buscar por ID ou mensagem..."
+          placeholder="Buscar por @ ou mensagem..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
