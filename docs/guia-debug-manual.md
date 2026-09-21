@@ -1,7 +1,9 @@
 # Guia: Testando e Debugando o Sistema Manualmente
 
-Este guia ensina como usar a interface Swagger (`/docs`) para enviar mensagens
-e depois verificar o resultado diretamente no banco de dados.
+Este guia ensina como simular mensagens do Instagram Direct (com o script
+`scripts/simulate_instagram_webhook.py`) e depois verificar o resultado
+diretamente no banco de dados. O Swagger (`/docs`) continua útil para as rotas
+`/api/*`, mas não para o webhook — ele exige assinatura HMAC.
 
 ## Passo 0: Subir a Stack
 
@@ -26,43 +28,39 @@ Acesse no navegador:
 http://localhost:8000/docs
 ```
 
-Você verá todos os endpoints documentados com formulários interativos.
+Você verá os endpoints documentados. Para enviar mensagens ao webhook, use o script do próximo passo.
 
 ---
 
 ## Passo 2: Enviar uma Mensagem via Webhook
 
-1. No Swagger, localize **POST /webhook/evolution/{token}**
-2. Clique em **Try it out**
-3. No campo `token` (path param), digite o mesmo valor de
-   `EVOLUTION_WEBHOOK_TOKEN` do seu `.env`
-4. No campo `agent` (query param), digite: `secretaria`
-5. No corpo (JSON), preencha:
+O webhook `POST /webhook/instagram` só aceita requisições assinadas com o
+`INSTAGRAM_APP_SECRET` (header `X-Hub-Signature-256`). O script monta o
+payload como a Meta faz, assina e envia:
 
-```json
-{
-  "event": "messages.upsert",
-  "instance": "minha-instancia",
-  "data": {
-    "key": {
-      "remoteJid": "5511999990001@s.whatsapp.net",
-      "fromMe": false,
-      "id": "MSG_TESTE_001"
-    },
-    "message": {"conversation": "Olá! O que vocês fazem?"},
-    "messageType": "conversation"
-  }
-}
+```bash
+python scripts/simulate_instagram_webhook.py "Olá! O que vocês fazem?" \
+  --external-id 17841400000000101
 ```
 
-6. Clique em **Execute**
-7. A resposta deve ser **200**:
-   ```json
-   {"received": true}
-   ```
+A resposta deve ser **200**:
+
+```json
+{"received": true, "enqueued": 1}
+```
 
 > O 200 significa apenas que a mensagem foi **enfileirada**. O processamento
-> acontece no Worker em background.
+> acontece no Worker em background. Como o `external_id` é fictício, o envio da
+> resposta ao Instagram falha e a mensagem entra em retry (`attempts`,
+> `error`) — o que já permite ver o fluxo. Para ver a resposta chegar de
+> verdade, use o IGSID de uma conta real de teste.
+
+Para descobrir o `message_id` (`mid`) gerado, consulte pelo `external_id`:
+
+```sql
+SELECT id, message_id, status FROM message_queue
+WHERE external_id = '17841400000000101' ORDER BY id DESC;
+```
 
 ---
 
@@ -77,9 +75,10 @@ docker compose exec db psql -U postgres -d whatsapp_langchain
 ### 3.1 — Ver a mensagem na fila
 
 ```sql
-SELECT id, phone_number, agent_id, status, incoming_message, response, error
+SELECT id, external_id, agent_id, status, incoming_message, response, error
 FROM message_queue
-WHERE message_id = 'MSG_TESTE_001';
+WHERE external_id = '17841400000000101'
+ORDER BY id DESC;
 ```
 
 **O que observar:**
@@ -98,15 +97,15 @@ WHERE message_id = 'MSG_TESTE_001';
 ```sql
 SELECT incoming_message, response, processed_at
 FROM message_queue
-WHERE message_id = 'MSG_TESTE_001' AND status = 'done';
+WHERE external_id = '17841400000000101' AND status = 'done';
 ```
 
 ### 3.3 — Ver a conversa criada
 
 ```sql
-SELECT phone_number, agent_id, message_count, last_message, last_message_at
+SELECT external_id, agent_id, message_count, last_message, last_message_at
 FROM conversations
-WHERE phone_number = '+5511999990001';
+WHERE external_id = '17841400000000101';
 ```
 
 `message_count` incrementa a cada mensagem processada.
@@ -115,14 +114,12 @@ WHERE phone_number = '+5511999990001';
 
 ## Passo 4: Enviar Follow-up (Conversa Multi-turno)
 
-Volte ao Swagger e envie outra mensagem do **mesmo telefone** (troque só
-`key.id` e `message.conversation` no JSON do Passo 2):
+Envie outra mensagem do **mesmo contato** (mesmo `--external-id`):
 
-| Campo | Valor |
-|---|---|
-| `key.id` | `MSG_TESTE_002` |
-| `key.remoteJid` | `5511999990001@s.whatsapp.net` |
-| `message.conversation` | `Como posso aprender mais sobre agentes?` |
+```bash
+python scripts/simulate_instagram_webhook.py "Como posso aprender mais sobre agentes?" \
+  --external-id 17841400000000101
+```
 
 Depois verifique:
 
@@ -130,34 +127,36 @@ Depois verifique:
 -- A resposta deve considerar o contexto da conversa anterior
 SELECT incoming_message, response
 FROM message_queue
-WHERE phone_number = '+5511999990001' AND status = 'done'
+WHERE external_id = '17841400000000101' AND status = 'done'
 ORDER BY created_at;
 
 -- message_count deve ter incrementado para 2
-SELECT message_count FROM conversations WHERE phone_number = '+5511999990001';
+SELECT message_count FROM conversations WHERE external_id = '17841400000000101';
 ```
 
 ---
 
 ## Passo 5: Testar o Debounce
 
-Envie **3 mensagens rápidas** (uma atrás da outra, sem esperar) com o mesmo
-telefone (`5511999990002@s.whatsapp.net`) e **ids diferentes**:
+Envie **3 mensagens rápidas** (uma atrás da outra, sem esperar) do mesmo
+contato (`17841400000000102`):
 
-1. `MSG_DEB_01` — texto: `Oi`
-2. `MSG_DEB_02` — texto: `Tudo bem?`
-3. `MSG_DEB_03` — texto: `Quero saber sobre LangGraph`
+```bash
+for t in "Oi" "Tudo bem?" "Quero saber sobre LangGraph"; do
+  python scripts/simulate_instagram_webhook.py "$t" --external-id 17841400000000102
+done
+```
 
 Depois verifique:
 
 ```sql
 -- Quantas entradas na fila? Se o debounce funcionou, deve ser 1 (não 3)
 SELECT COUNT(*) FROM message_queue
-WHERE phone_number = '+5511999990002' AND agent_id = 'secretaria';
+WHERE external_id = '17841400000000102' AND agent_id = 'secretaria';
 
 -- O texto ficou concatenado?
 SELECT incoming_message FROM message_queue
-WHERE phone_number = '+5511999990002'
+WHERE external_id = '17841400000000102'
 ORDER BY created_at DESC LIMIT 1;
 ```
 
@@ -175,20 +174,17 @@ Quero saber sobre LangGraph
 
 ### 6.1 — Salvar uma memória
 
-Envie via Swagger:
-
-| Campo | Valor |
-|---|---|
-| `key.id` | `MSG_MEM_01` |
-| `key.remoteJid` | `5511999990003@s.whatsapp.net` |
-| `message.conversation` | `Use save_memory e salve: meu código secreto é ALPHA-7742` |
+```bash
+python scripts/simulate_instagram_webhook.py "Use save_memory e salve: meu código secreto é ALPHA-7742" \
+  --external-id 17841400000000103
+```
 
 Aguarde `status = done`, depois verifique no store:
 
 ```sql
 SELECT key, value->>'memory' AS memoria
 FROM store
-WHERE prefix = '+5511999990003.memories';
+WHERE prefix = '17841400000000103.memories';
 ```
 
 ### 6.2 — Recuperar sem histórico
@@ -196,23 +192,23 @@ WHERE prefix = '+5511999990003.memories';
 Limpe os checkpoints para simular uma nova sessão:
 
 ```sql
-DELETE FROM checkpoint_writes WHERE thread_id = '+5511999990003:secretaria';
-DELETE FROM checkpoints WHERE thread_id = '+5511999990003:secretaria';
+DELETE FROM checkpoint_writes WHERE thread_id = '17841400000000103:secretaria';
+DELETE FROM checkpoints WHERE thread_id = '17841400000000103:secretaria';
 ```
 
 Envie nova mensagem pedindo recall:
 
-| Campo | Valor |
-|---|---|
-| `key.id` | `MSG_MEM_02` |
-| `key.remoteJid` | `5511999990003@s.whatsapp.net` |
-| `message.conversation` | `Use read_memory e me diga qual é meu código secreto` |
+```bash
+python scripts/simulate_instagram_webhook.py "Use read_memory e me diga qual é meu código secreto" \
+  --external-id 17841400000000103
+```
 
 Verifique se a resposta contém `ALPHA-7742`:
 
 ```sql
 SELECT response FROM message_queue
-WHERE message_id = 'MSG_MEM_02' AND status = 'done';
+WHERE external_id = '17841400000000103' AND status = 'done'
+ORDER BY id DESC LIMIT 1;
 ```
 
 ---
@@ -225,7 +221,7 @@ Sem sair do Swagger, teste os endpoints admin:
 |---|---|
 | `GET /api/agents` | Agentes disponíveis (`secretaria`) |
 | `GET /api/chats` | Lista de conversas com `message_count` |
-| `GET /api/chats/+5511999990001` | Mensagens de um telefone específico |
+| `GET /api/chats/17841400000000101` | Mensagens de um contato específico |
 | `GET /api/metrics` | `total_today`, `queue_size`, `failures_today` |
 
 ---
@@ -234,11 +230,11 @@ Sem sair do Swagger, teste os endpoints admin:
 
 ```sql
 -- Mensagens com erro (por que falharam?)
-SELECT phone_number, incoming_message, error, attempts
+SELECT external_id, incoming_message, error, attempts
 FROM message_queue WHERE status = 'failed';
 
 -- Mensagens presas em processing (worker morreu?)
-SELECT id, phone_number, lease_until, attempts
+SELECT id, external_id, lease_until, attempts
 FROM message_queue WHERE status = 'processing';
 
 -- Todas as memórias salvas

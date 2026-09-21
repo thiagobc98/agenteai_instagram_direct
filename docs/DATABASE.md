@@ -7,7 +7,7 @@ para validação operacional (fila, conversa e memória semântica via tools).
 
 O PostgreSQL guarda três blocos de dados:
 
-1. Tabelas de aplicação (`message_queue`, `conversations`, `_migrations`)
+1. Tabelas de aplicação (`message_queue`, `conversations`, `appointment_reminders`, `_migrations`)
 2. Tabelas de checkpointer do LangGraph (`checkpoints`, `checkpoint_writes`, `checkpoint_blobs`, `checkpoint_migrations`)
 3. Tabelas de memória semântica (`store`, `store_vectors`, `store_migrations`, `vector_migrations`)
 
@@ -22,10 +22,14 @@ Controle das migrações SQL locais (`db/migrations/*.sql`).
 Fila operacional de mensagens.
 
 Campos principais:
-- `message_id`: id externo da mensagem (ex: `key.id` do Evolution API)
-- `phone_number`, `agent_id`, `thread_id`
+- `message_id`: id externo da mensagem (`mid` do Instagram)
+- `external_id`: IGSID do contato no Instagram (antes `phone_number`, ver migration `006`)
+- `to_id`: ID da conta destinatária (opcional; antes `to_number`)
+- `channel`: `instagram` (novas linhas) ou `whatsapp` (histórico anterior à migração)
+- `agent_id`, `thread_id` (`{external_id}:{agent_id}`)
 - `incoming_message`: entrada original
-- `media_base64`, `media_type` (`media_url` existe por compatibilidade histórica, não usado pelo Evolution)
+- `media_url`, `media_type`: anexo do Instagram — `media_url` é a URL que o Worker baixa e `media_type` o tipo genérico (`image/*`, `audio/*`) ou `unsupported/<tipo>`
+- `media_base64`: só em dados históricos (o Instagram não entrega base64)
 - `normalized_input`: texto final enviado ao agente (quando houver)
 - `media_processing_status`: `none | processed | disabled | failed | unsupported`
 - `media_processing_error`: erro de pré-processamento de mídia
@@ -34,7 +38,11 @@ Campos principais:
 
 ### `conversations`
 
-Resumo por conversa (`phone_number + agent_id`) para o painel/admin.
+Resumo por conversa (`external_id + agent_id`) para o painel/admin. Tem também `channel`.
+
+### `appointment_reminders`
+
+Lembretes de consulta já enviados (`event_id`, `external_id`, `appointment_start`).
 
 ## Tabelas do LangGraph
 
@@ -90,7 +98,7 @@ ORDER BY total DESC;
 SELECT
   id,
   message_id,
-  phone_number,
+  external_id,
   media_type,
   media_processing_status,
   status,
@@ -102,7 +110,7 @@ SELECT
   created_at,
   processed_at
 FROM message_queue
-WHERE phone_number = '+5511999999999'
+WHERE external_id = '17841400000000001'
 ORDER BY id DESC;
 ```
 
@@ -115,7 +123,7 @@ SELECT
   value->>'memory' AS memory,
   created_at
 FROM store
-WHERE prefix = '+5511999999999.memories'
+WHERE prefix = '17841400000000001.memories'
 ORDER BY created_at DESC;
 ```
 
@@ -128,7 +136,7 @@ SELECT
   value->>'memory' AS memory,
   updated_at
 FROM store
-WHERE prefix = '+5511999999999.memories'
+WHERE prefix = '17841400000000001.memories'
 ORDER BY updated_at DESC
 LIMIT 20;
 ```
@@ -139,12 +147,12 @@ LIMIT 20;
 SELECT
   id,
   message_id,
-  phone_number,
+  external_id,
   status,
   left(response, 220) AS response_preview,
   created_at
 FROM message_queue
-WHERE phone_number = '+5511999999999'
+WHERE external_id = '17841400000000001'
   AND status = 'done'
 ORDER BY id DESC
 LIMIT 20;
@@ -160,7 +168,7 @@ SELECT
   octet_length(blob) AS bytes,
   left(encode(blob, 'escape'), 600) AS blob_preview
 FROM checkpoint_writes
-WHERE thread_id = '+5511999999999:secretaria'
+WHERE thread_id = '17841400000000001:secretaria'
   AND channel = 'messages'
 ORDER BY checkpoint_id DESC
 LIMIT 20;
@@ -170,7 +178,7 @@ LIMIT 20;
 
 ```sql
 SELECT
-  phone_number,
+  external_id,
   agent_id,
   thread_id,
   last_message,
@@ -181,10 +189,24 @@ ORDER BY last_message_at DESC
 LIMIT 50;
 ```
 
+### 8) Última mensagem recebida de um contato (janela de 24h)
+
+```sql
+SELECT external_id, MAX(created_at) AS ultima_mensagem
+FROM message_queue
+WHERE external_id = '17841400000000001'
+GROUP BY external_id;
+```
+
+O Instagram só permite enviar mensagem dentro de 24h dessa data
+(ver [INSTAGRAM_API.md](INSTAGRAM_API.md)).
+
 ## Observações
 
 - `conversations` mostra apenas resumo; não mostra detalhes de save/recall.
 - Save de memória é observado em `store` (`prefix = "<user_id>.memories"`).
 - Recall é observado no output final (`message_queue.response`) e nos logs do worker (`memory_read`).
+- Linhas com `channel = 'whatsapp'` são histórico da versão anterior (WhatsApp); o `external_id`
+  delas é um telefone E.164, não um IGSID.
 - `message_queue.status='done'` significa ciclo encerrado com resposta ao usuário,
   inclusive respostas automáticas quando mídia está desabilitada ou falha.

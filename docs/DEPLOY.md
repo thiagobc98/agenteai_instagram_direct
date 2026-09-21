@@ -7,7 +7,7 @@ reverso com TLS, prontos para uma VPS via Docker Compose.
 ## Escopo desta fase
 
 Incluído:
-- tudo da Fase 2/3 (webhook Evolution API real, fila, worker, checkpointer, memória)
+- tudo da Fase 2/3 (webhook do Instagram real, fila, worker, checkpointer, memória)
 - Admin Panel (Next.js) com login e sessão
 - rotas `/api/*` protegidas por autenticação (cookie de sessão)
 - rate limit distribuído via Redis (substitui o rate limit em memória)
@@ -79,7 +79,7 @@ Veja `.env.example` para a lista completa.
 4. Verificar `curl -I https://$DOMAIN/health` (API) e
    `curl -I https://$DOMAIN/` (frontend).
 5. Acessar `https://$DOMAIN/login` e autenticar com `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
-6. Enviar mensagem de teste real via WhatsApp/Evolution API.
+6. Cadastrar `https://$DOMAIN/webhook/instagram?agent=secretaria` como callback no painel da Meta (veja [INSTAGRAM_API.md](INSTAGRAM_API.md)) e enviar uma mensagem de teste real pelo Instagram Direct.
 7. Acompanhar `/api/metrics` (autenticado) e logs.
 
 ## Deploy com Docker
@@ -145,12 +145,14 @@ a stack local, nunca contra produção.
 - health check responde 200 (`/health`, sem autenticação)
 - `message_queue` recebe mensagens
 - worker faz transição `queued -> processing -> done|failed`
-- memória semântica persiste em `store` com prefixo `<phone_number>.memories`
+- memória semântica persiste em `store` com prefixo `<external_id>.memories`
 - retries acontecem quando há erro transitório
 - login no admin panel funciona; `/api/*` retorna 401 sem sessão
-- rate limit (429) aparece sob carga alta de um mesmo telefone (ver stress test)
+- rate limit (429) aparece sob carga alta de um mesmo contato (ver stress test)
 - certificado TLS válido emitido pelo Caddy
 - portas internas fechadas no firewall (só 22/80/443 externas)
+- `INSTAGRAM_ACCESS_TOKEN` de longa duração com renovação planejada (expira; envio falha com `instagram_token_invalid`)
+- app da Meta em modo Live (App Review aprovado) para atender clientes reais
 - backup agendado no crontab e testado (restore manual)
 - logs estruturados habilitados (`LOG_JSON=true`)
 

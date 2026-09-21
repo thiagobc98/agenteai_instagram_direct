@@ -10,13 +10,13 @@ Este guia tem duas trilhas:
 - `uv` (gerenciador de pacotes)
 - Docker + Docker Compose
 - conta OpenRouter (API key)
-- instância Evolution API rodando (obrigatória para o Worker — veja [Evolution API](EVOLUTION_API.md) para setup completo)
+- conta profissional do Instagram + app no Meta for Developers (obrigatórios para o Worker enviar respostas — veja [Instagram Direct](INSTAGRAM_API.md) para o setup completo)
 
 ## 1. Setup local
 
 ```bash
 git clone <repo-url>
-cd whatsapp-langchain
+cd agenteai_instagram_direct
 make setup
 cp .env.example .env
 ```
@@ -27,11 +27,10 @@ Edite `.env` e configure no mínimo:
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENROUTER_MIDIA_MODEL=google/gemini-2.5-flash-lite
 
-# Evolution API (obrigatório para o Worker)
-EVOLUTION_BASE_URL=https://evo.seudominio.com
-EVOLUTION_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-EVOLUTION_INSTANCE=minha-instancia
-EVOLUTION_WEBHOOK_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Instagram Direct (veja docs/INSTAGRAM_API.md)
+INSTAGRAM_ACCESS_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   # obrigatório no Worker
+INSTAGRAM_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx      # obrigatório na API (assinatura)
+INSTAGRAM_VERIFY_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx    # obrigatório na API (handshake)
 ```
 
 ## 2. Trilha A: desenvolvimento de agente no Studio
@@ -88,25 +87,19 @@ make logs
 ```bash
 curl -X POST "http://localhost:8000/webhook/sync?agent=secretaria" \
   -H "Content-Type: application/json" \
-  -d '{"phone":"+5511999999999","message":"Me explique debounce"}'
+  -d '{"external_id":"17841400000000001","message":"Me explique debounce"}'
 ```
 
 Use para debugging rápido sem fila.
 
 ### 4.2 Webhook assíncrono (arquitetura real)
 
+O webhook do Instagram exige a assinatura `X-Hub-Signature-256` (HMAC do
+body com o `INSTAGRAM_APP_SECRET`), então use o script que monta o payload
+e assina como a Meta faz:
+
 ```bash
-curl -X POST "http://localhost:8000/webhook/evolution/SEU_TOKEN?agent=secretaria" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event": "messages.upsert",
-    "instance": "minha-instancia",
-    "data": {
-      "key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": false, "id": "MSG123"},
-      "message": {"conversation": "Mensagem de teste"},
-      "messageType": "conversation"
-    }
-  }'
+python scripts/simulate_instagram_webhook.py "Mensagem de teste"
 ```
 
 Depois consulte:
@@ -114,54 +107,36 @@ Depois consulte:
 ```bash
 curl http://localhost:8000/api/metrics
 curl http://localhost:8000/api/chats
-curl http://localhost:8000/api/chats/+5511999999999
+curl http://localhost:8000/api/chats/17841400000000001
 ```
 
 ### 4.2.1 Teste manual no Swagger (`/docs`)
 
 1. Abra `http://localhost:8000/docs`.
-2. Execute `GET /api/agents` e confirme `secretaria`.
-3. Abra `POST /webhook/evolution/{token}` e clique em `Try it out`.
-4. Preencha:
-   - `token` (path): o mesmo valor de `EVOLUTION_WEBHOOK_TOKEN` no `.env`
-   - `agent` (query): `secretaria`
-   - body: o JSON de exemplo da seção 4.2, trocando o texto da mensagem
-5. Execute e verifique:
-   - resposta `200` com `{"received": true}`
-   - dados em `GET /api/chats/+5511999999999`
+2. Execute `GET /api/agents` (requer login em `POST /api/auth/login`) e
+   confirme `secretaria`.
+3. `POST /webhook/instagram` **não** dá para testar pelo Swagger (a assinatura
+   HMAC precisa ser calculada sobre o body); use o script da seção 4.2.
+4. Confirme:
+   - resposta `200` com `{"received": true, "enqueued": 1}`
+   - dados em `GET /api/chats/17841400000000001`
+
+> O Worker tenta **responder de verdade** ao `external_id` informado. Com o ID
+> fictício o envio falha e a mensagem entra no fluxo de retry — para ver a
+> resposta chegar, passe `--external-id` com o IGSID de uma conta real de teste.
 
 ### 4.3 Teste de memória semântica (save + recall via tools)
 
 1. Envie uma mensagem pedindo para salvar um fato:
 
 ```bash
-curl -X POST "http://localhost:8000/webhook/evolution/SEU_TOKEN?agent=secretaria" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event": "messages.upsert",
-    "instance": "minha-instancia",
-    "data": {
-      "key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": false, "id": "MSGMEM001"},
-      "message": {"conversation": "Use a ferramenta save_memory e salve este fato: meu código é codex-12345"},
-      "messageType": "conversation"
-    }
-  }'
+python scripts/simulate_instagram_webhook.py "Use a ferramenta save_memory e salve este fato: meu código é codex-12345"
 ```
 
 2. Envie outra mensagem pedindo recall explícito:
 
 ```bash
-curl -X POST "http://localhost:8000/webhook/evolution/SEU_TOKEN?agent=secretaria" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "event": "messages.upsert",
-    "instance": "minha-instancia",
-    "data": {
-      "key": {"remoteJid": "5511999999999@s.whatsapp.net", "fromMe": false, "id": "MSGMEM002"},
-      "message": {"conversation": "Sem salvar nada novo agora, use read_memory e me diga meu código"},
-      "messageType": "conversation"
-    }
-  }'
+python scripts/simulate_instagram_webhook.py "Sem salvar nada novo agora, use read_memory e me diga meu código"
 ```
 
 3. Verifique evidências no banco:
@@ -169,12 +144,12 @@ curl -X POST "http://localhost:8000/webhook/evolution/SEU_TOKEN?agent=secretaria
 ```sql
 SELECT prefix, value->>'memory' AS memory, updated_at
 FROM store
-WHERE prefix = '+5511999999999.memories'
+WHERE prefix = '17841400000000001.memories'
 ORDER BY updated_at DESC;
 
 SELECT id, message_id, status, response
 FROM message_queue
-WHERE phone_number = '+5511999999999'
+WHERE external_id = '17841400000000001'
 ORDER BY id DESC
 LIMIT 5;
 ```
@@ -273,7 +248,7 @@ grep OPENROUTER_API_KEY .env
 
 ## Próximos passos
 
-- [Evolution API](EVOLUTION_API.md)
+- [Instagram Direct](INSTAGRAM_API.md)
 - [Arquitetura](ARCHITECTURE.md)
 - [Criando Agentes](ADDING_AGENTS.md)
 - [Banco de Dados](DATABASE.md)

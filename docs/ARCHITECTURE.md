@@ -7,18 +7,20 @@ entrada confiável, processamento assíncrono, persistência, recuperação de f
 ## Estado Atual (Fase 4 concluída)
 
 Implementado:
-- API FastAPI com webhook Evolution API assíncrono (`POST /webhook/evolution/{token}`)
+- API FastAPI com webhook do Instagram assíncrono (`GET/POST /webhook/instagram`)
 - fila em PostgreSQL (`message_queue`) com debounce e lease
 - worker assíncrono consumindo fila com `FOR UPDATE SKIP LOCKED`
 - execução de agentes via loader dinâmico
 - checkpointer PostgreSQL (contexto por `thread_id`)
-- store semântico PostgreSQL (memória por `user_id`)
+- store semântico PostgreSQL (memória por `user_id`, o IGSID do contato)
 - middleware de contexto (`trim`, `summarize`, `none`)
 - memória semântica orientada a tools (`save_memory` e `read_memory`)
 - processamento de mídia (imagem e áudio) via OpenRouter
 - retry com backoff progressivo e status de falha
-- envio real de resposta via Evolution API no worker
-- validação do webhook via token secreto no path (Evolution não assina requests)
+- envio real de resposta via Instagram Messaging API (Graph API) no worker
+- validação do webhook: handshake `hub.verify_token` (GET) e assinatura `X-Hub-Signature-256` (POST)
+- mídia por URL (attachments do Instagram) baixada no worker
+- notificações proativas sujeitas à janela de 24h do Instagram
 - rate limit distribuído via Redis (sliding window, compartilhado entre réplicas)
 - autenticação do admin panel (login + cookie de sessão assinado)
 - APIs administrativas para inspeção, protegidas por sessão de admin
@@ -30,11 +32,11 @@ Implementado:
 ![Arquitetura](architecture.png)
 
 ```text
-[Evolution API/WhatsApp]
+[Meta / Instagram Direct]
       |
       v
 [API FastAPI]
-  - valida entrada
+  - valida assinatura
   - rate limit
   - enqueue/debounce
       |
@@ -58,28 +60,30 @@ Implementado:
 ### API (`src/whatsapp_langchain/server/`)
 
 Responsabilidades:
-- aceitar webhook Evolution API
+- responder ao handshake de verificação da Meta e aceitar o webhook do Instagram
 - responder rápido com confirmação de recebimento
 - não executar agente inline
 - enfileirar payload normalizado
 
 Contratos relevantes:
-- `agent` via query string, `token` secreto via path (`/webhook/evolution/{token}`)
-- payload JSON do Evolution (evento `messages.upsert`, mídia em base64)
-- `thread_id = "{phone}:{agent}"`
+- `agent` via query string (`/webhook/instagram?agent=<id>`); a autenticidade vem do header `X-Hub-Signature-256` (HMAC-SHA256 do body bruto com o App Secret)
+- payload JSON do Instagram (`entry[].messaging[]`; mídia como URL em `attachments[].payload.url`)
+- `thread_id = "{external_id}:{agent}"`, onde `external_id` é o IGSID do contato
 
 ### Worker (`src/whatsapp_langchain/worker/`)
 
 Responsabilidades:
 - fazer polling da fila
-- processar mídia se existir
+- baixar e processar mídia (URL) se existir
 - carregar agente com checkpointer/store compartilhados (abertos no boot)
 - invocar grafo com `thread_id` e `user_id`
+- enviar a resposta pelo Instagram (`InstagramClient`: `mark_seen`, `typing_on`, texto em blocos de até 1000 bytes)
 - persistir sucesso/falha
+- disparar as notificações diárias (lembretes e resumo), respeitando a janela de 24h
 
 Contrato de execução do agente:
 - `thread_id`: memória de conversa (checkpointer)
-- `user_id`: memória cross-thread (store semântico), derivado do telefone do webhook Evolution
+- `user_id`: memória cross-thread (store semântico) e identidade do paciente nas tools de agenda — o IGSID (`external_id`) do webhook
 
 ### Shared (`src/whatsapp_langchain/shared/`)
 
@@ -114,22 +118,22 @@ Campos importantes:
 ### `conversations`
 
 Tabela agregada para consultas administrativas.
-- chave lógica: `(phone_number, agent_id)`
+- chave lógica: `(external_id, agent_id)`; `channel` distingue o histórico do WhatsApp (`whatsapp`) das conversas do Instagram (`instagram`)
 - atualizada por `upsert` a cada mensagem concluída
 
 ## Fluxo End-to-End
 
-1. Usuário envia mensagem no WhatsApp.
-2. Evolution API faz `POST /webhook/evolution/{token}?agent=<agent_id>`.
-3. API valida agente, aplica rate limit e chama `enqueue_or_buffer`.
+1. Cliente envia mensagem no Instagram Direct.
+2. A Meta faz `POST /webhook/instagram?agent=<agent_id>`, assinado com o App Secret.
+3. API valida a assinatura e o agente, aplica rate limit por contato e chama `enqueue_or_buffer` para cada mensagem do lote.
 4. Debounce concatena mensagens rápidas do mesmo usuário/agente.
 5. Worker faz `claim_next` com lease.
-6. Worker monta `HumanMessage` (texto, imagem ou transcrição de áudio).
+6. Worker baixa a mídia (se houver) e monta `HumanMessage` (texto, descrição de imagem ou transcrição de áudio).
 7. Worker carrega agente com:
    - `AsyncPostgresSaver` (checkpointer) aberto no startup do worker
    - `AsyncPostgresStore` + embeddings (quando memória habilitada), também aberto no startup
 8. Agente executa e retorna resposta.
-9. Worker persiste resultado (`mark_done`) e atualiza `conversations`.
+9. Worker envia a resposta ao Instagram; só então persiste o resultado (`mark_done`) e atualiza `conversations`.
 10. Em erro, `mark_failed` decide retry com backoff ou falha final.
 
 ## Contexto e Memória
@@ -143,7 +147,7 @@ Persistência de mensagens de uma conversa específica (`thread_id`).
 - namespace: `(user_id, "memories")`
 - `save_memory` grava fatos relevantes
 - `read_memory` recupera memórias por similaridade quando o agente precisar
-- `user_id` no runtime vem de `phone_number` (payload Evolution)
+- `user_id` no runtime vem de `external_id` (IGSID do payload do Instagram)
 - não usamos escopo `tenant_user`/`tenant_shared` neste projeto
 
 Isso separa duas necessidades diferentes:
@@ -162,9 +166,17 @@ Agrupa mensagens enviadas em sequência curta (`MESSAGE_BUFFER_SECONDS`) para re
 
 ### Rate limits
 
-- API: limite por telefone/hora, distribuído via Redis (sorted set, sliding
+- API: limite por contato (IGSID)/hora, distribuído via Redis (sorted set, sliding
   window) — compartilhado entre réplicas da API
 - LLM: token bucket por processo (`InMemoryRateLimiter`)
+
+### Janela de 24h do Instagram
+
+O Instagram só permite enviar mensagem a quem escreveu para a conta nas
+últimas 24h. Respostas ao cliente ficam sempre dentro da janela; as
+notificações proativas (`worker/notifications.py`) consultam a última mensagem
+recebida do destinatário (`get_last_inbound_at`) e **pulam o envio, com log**,
+quando a janela expirou. Detalhes em [INSTAGRAM_API.md](INSTAGRAM_API.md).
 
 ### Autenticação do Admin Panel
 
@@ -180,12 +192,13 @@ Logs estruturados com `structlog` em todos os componentes.
 ## Endpoints Disponíveis
 
 - `GET /health`
-- `POST /webhook/evolution/{token}?agent=<id>`
+- `GET /webhook/instagram` (verificação da Meta)
+- `POST /webhook/instagram?agent=<id>` (requer `X-Hub-Signature-256`)
 - `POST /webhook/sync?agent=<id>` (educacional)
 - `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`
 - `GET /api/agents` (requer sessão de admin)
 - `GET /api/chats` (requer sessão de admin)
-- `GET /api/chats/{phone_number}` (requer sessão de admin)
+- `GET /api/chats/{external_id}` (requer sessão de admin)
 - `GET /api/metrics` (requer sessão de admin)
 
 ## Decisões Arquiteturais (didáticas)
