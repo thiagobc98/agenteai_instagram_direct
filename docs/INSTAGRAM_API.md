@@ -130,6 +130,13 @@ INSTAGRAM_GRAPH_API_VERSION=v25.0
 INSTAGRAM_GRAPH_BASE_URL=https://graph.instagram.com
 ```
 
+- ⚠️ **Duas chaves secretas:** com Instagram Login o painel mostra a chave
+  secreta do app Meta (Configurações do app → Básico) **e** a "chave secreta do
+  app do Instagram" (Instagram → Configuração da API). A doc que consultei não
+  deixa claro qual assina o webhook. Se o log da API mostrar
+  `instagram_signature_invalid` com mensagens chegando, informe as duas
+  separadas por vírgula: `INSTAGRAM_APP_SECRET=segredo_a,segredo_b` (a
+  assinatura vale se bater com qualquer uma).
 - O **Worker** exige `INSTAGRAM_ACCESS_TOKEN` (falha ao subir sem ele).
 - A **API** exige `INSTAGRAM_APP_SECRET` (assinatura) e `INSTAGRAM_VERIFY_TOKEN`
   (handshake); sem eles o webhook responde `500`.

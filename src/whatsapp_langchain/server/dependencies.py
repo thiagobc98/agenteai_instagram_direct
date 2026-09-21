@@ -33,13 +33,21 @@ def verify_instagram_signature(
     A Meta assina o payload com HMAC-SHA256 usando o App Secret e envia o
     resultado como `sha256=<hex>`. Comparação em tempo constante evita
     timing attack.
+
+    `app_secret` aceita mais de um segredo separado por vírgula: um app com
+    Instagram Login tem duas chaves secretas no painel (a do app Meta e a "do
+    app do Instagram") e também facilita rotacionar o segredo sem downtime.
     """
     if not signature_header or not signature_header.startswith("sha256="):
         return False
 
-    expected = hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
     received = signature_header.removeprefix("sha256=")
-    return hmac.compare_digest(expected, received)
+    secrets = [s.strip() for s in app_secret.split(",") if s.strip()]
+    for secret in secrets:
+        expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+        if hmac.compare_digest(expected, received):
+            return True
+    return False
 
 
 async def validate_instagram_signature(request: Request) -> None:
@@ -65,7 +73,14 @@ async def validate_instagram_signature(request: Request) -> None:
     if not verify_instagram_signature(
         raw_body, signature, app_secret.get_secret_value()
     ):
-        logger.warning("instagram_signature_invalid")
+        logger.warning(
+            "instagram_signature_invalid",
+            has_signature=bool(signature),
+            secrets_configured=len(
+                [s for s in app_secret.get_secret_value().split(",") if s.strip()]
+            ),
+            body_bytes=len(raw_body),
+        )
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
 

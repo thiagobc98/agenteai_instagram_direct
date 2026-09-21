@@ -117,6 +117,26 @@ class TestVerifySignature:
         bare = sign(raw).removeprefix("sha256=")
         assert not verify_instagram_signature(raw, bare, APP_SECRET)
 
+    def test_accepts_any_of_several_comma_separated_secrets(self):
+        raw = b'{"a": 1}'
+        secrets = "segredo-do-app-meta, segredo-do-app-instagram"
+        assert verify_instagram_signature(
+            raw, sign(raw, "segredo-do-app-meta"), secrets
+        )
+        assert verify_instagram_signature(
+            raw, sign(raw, "segredo-do-app-instagram"), secrets
+        )
+
+    def test_rejects_when_none_of_the_secrets_match(self):
+        raw = b'{"a": 1}'
+        assert not verify_instagram_signature(raw, sign(raw, "outro"), "a, b")
+
+    def test_ignores_empty_entries_in_secret_list(self):
+        raw = b'{"a": 1}'
+        assert verify_instagram_signature(raw, sign(raw), f" , {APP_SECRET},")
+        # Lista só com vazios nunca valida (nem uma assinatura de segredo vazio).
+        assert not verify_instagram_signature(raw, sign(raw, ""), " , ")
+
 
 class TestVerificationHandshake:
     def _get(self, **params):
