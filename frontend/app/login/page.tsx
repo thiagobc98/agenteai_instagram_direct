@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "../../lib/api";
-import { IconChats, IconLock, IconUser } from "../../components/icons";
+import { IconLock, IconUser } from "../../components/icons";
 import styles from "./page.module.css";
 
 export default function LoginPage() {
@@ -31,9 +32,15 @@ export default function LoginPage() {
     <main className={styles.page}>
       <form onSubmit={handleSubmit} className={`card ${styles.card}`}>
         <div className={styles.logo}>
-          <span className={styles.logoMark}>
-            <IconChats size={20} />
-          </span>
+          <Image
+            src="/logo-loja.jpg"
+            alt="Logo Patricia Berberich"
+            width={52}
+            height={52}
+            className={styles.logoImage}
+            unoptimized
+            priority
+          />
           <div>
             <h1 className={styles.title}>Patricia Berberich</h1>
             <p className={styles.subtitle}>Painel administrativo</p>
