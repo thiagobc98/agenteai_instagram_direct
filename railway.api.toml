@@ -1,0 +1,15 @@
+# Config-as-code do serviço "api" no Railway.
+# Aponte este arquivo em Settings -> Config-as-code Path do serviço.
+# Variáveis de ambiente, volumes e domínio público continuam configurados
+# na dashboard (Settings -> Variables / Networking). Ver docs/DEPLOY.md.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.api"
+watchPatterns = ["src/**", "db/**", "Dockerfile.api", "pyproject.toml", "uv.lock"]
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

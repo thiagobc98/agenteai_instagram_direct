@@ -1,0 +1,15 @@
+0000000000000000000000000000000000000000 4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 thiagobc98 <thiagocabral98.tc@gmail.com> 1785258702 -0300	commit (initial): feat: vazio
+4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 thiagobc98 <thiagocabral98.tc@gmail.com> 1785258760 -0300	checkout: moving from main to staging
+4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 ed97f3ce50e42a63dc2b71d478f5b9aca7a1cacb thiagobc98 <thiagocabral98.tc@gmail.com> 1785337106 -0300	commit: fix: fase 1
+ed97f3ce50e42a63dc2b71d478f5b9aca7a1cacb b0baa95156d11dbd6659ce1cef96203d53295b90 thiagobc98 <thiagocabral98.tc@gmail.com> 1785354847 -0300	commit: fix: fase 3
+b0baa95156d11dbd6659ce1cef96203d53295b90 b0baa95156d11dbd6659ce1cef96203d53295b90 thiagobc98 <thiagocabral98.tc@gmail.com> 1785513645 -0300	checkout: moving from staging to teste
+b0baa95156d11dbd6659ce1cef96203d53295b90 0d9aea85737ee440530512f12d2b46fa5f650a07 thiagobc98 <thiagocabral98.tc@gmail.com> 1785621239 -0300	commit: fix: fase 4
+0d9aea85737ee440530512f12d2b46fa5f650a07 41d08950eb4b15de10a05ee498e4de00c9ff6ac3 thiagobc98 <thiagocabral98.tc@gmail.com> 1789147824 -0300	commit: fix: commit projeto frontend e backend
+41d08950eb4b15de10a05ee498e4de00c9ff6ac3 40769f467cccf98cccbdefd09f77573745a905bc thiagobc98 <thiagocabral98.tc@gmail.com> 1789151054 -0300	commit: fix: alteracao de twilo para evolutionapi
+40769f467cccf98cccbdefd09f77573745a905bc 5d10c666e2f18097234d888f3794703dae19b8be thiagobc98 <thiagocabral98.tc@gmail.com> 1789402363 -0300	commit: fix: openrouter max tokens 3000
+5d10c666e2f18097234d888f3794703dae19b8be 346387ace716bed34c688bb2f971edba0cd2c417 thiagobc98 <thiagocabral98.tc@gmail.com> 1789405410 -0300	commit: fix: dashboard e agenda
+346387ace716bed34c688bb2f971edba0cd2c417 dfd05d8942001f665cec37fe6ad4ea78c1aa8e5f thiagobc98 <thiagocabral98.tc@gmail.com> 1789407478 -0300	commit: fix: horários para bom dia, boa tarde e boa noite
+dfd05d8942001f665cec37fe6ad4ea78c1aa8e5f 9c4fc9d923ae4cbedaf1f546baff9a1672c65403 thiagobc98 <thiagocabral98.tc@gmail.com> 1789409970 -0300	commit: fix: lembrete aao paciente 1 dia antes da consulta as 9hrs da manhã e também envio de mensagem para o médico notificando AS 20HRS de todos os dias com todas as consultas do dia seguinte
+9c4fc9d923ae4cbedaf1f546baff9a1672c65403 dd96ebaeecc084eec7d8e53769904b9445973c4e thiagobc98 <thiagocabral98.tc@gmail.com> 1789569164 -0300	commit: feat: frontend da tela de login
+dd96ebaeecc084eec7d8e53769904b9445973c4e 4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 thiagobc98 <thiagocabral98.tc@gmail.com> 1789569549 -0300	checkout: moving from teste to main
+4415b4a8c23c9a749ea98369b0e7a26a5ff4a881 dd96ebaeecc084eec7d8e53769904b9445973c4e thiagobc98 <thiagocabral98.tc@gmail.com> 1789569567 -0300	pull --tags origin teste: Fast-forward

@@ -1,0 +1,45 @@
+.wrap {
+  padding: 1.6rem 2rem;
+}
+
+.title {
+  margin: 0 0 1.2rem;
+  font-size: 1.4rem;
+  color: var(--text-primary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.agentCard {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.iconWrap {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-md);
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.agentId {
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.agentSub {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+}

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eaf5ee"/>
+      <stop offset="100%" stop-color="#cfe6d9"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="760" fill="url(#wall)"/>
+  <rect x="0" y="760" width="1600" height="240" fill="#b9d4c6"/>
+  <rect x="0" y="754" width="1600" height="10" fill="#a3c3b1"/>
+
+  <!-- wall clock -->
+  <g transform="translate(1150,180)">
+    <circle r="62" fill="#ffffff" stroke="#16a34a" stroke-width="8"/>
+    <circle r="6" fill="#0f172a"/>
+    <line x1="0" y1="0" x2="0" y2="-34" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+    <line x1="0" y1="0" x2="26" y2="10" stroke="#0f172a" stroke-width="6" stroke-linecap="round"/>
+  </g>
+
+  <!-- right plant -->
+  <g transform="translate(1370,760)">
+    <ellipse cx="0" cy="14" rx="90" ry="16" fill="#b9c9c2" opacity="0.6"/>
+    <path d="M-55 0 L55 0 L40 160 L-40 160 Z" fill="#c98a5e"/>
+    <path d="M-55 0 L55 0 L50 34 L-50 34 Z" fill="#e0a479"/>
+    <g fill="#3f7d4f">
+      <path d="M0 -20 C -70 -60 -90 -160 -30 -220 C -10 -150 -10 -80 0 -20 Z"/>
+      <path d="M0 -20 C 70 -70 100 -170 40 -230 C 15 -160 8 -80 0 -20 Z"/>
+      <path d="M0 -20 C -20 -90 10 -170 0 -240 C 30 -170 30 -90 0 -20 Z" fill="#4f9660"/>
+    </g>
+  </g>
+
+  <!-- left plant -->
+  <g transform="translate(180,780)">
+    <ellipse cx="0" cy="12" rx="60" ry="12" fill="#b9c9c2" opacity="0.6"/>
+    <path d="M-38 0 L38 0 L28 110 L-28 110 Z" fill="#c98a5e"/>
+    <path d="M-38 0 L38 0 L34 24 L-34 24 Z" fill="#e0a479"/>
+    <g fill="#4f9660">
+      <path d="M0 -10 C -50 -40 -60 -110 -20 -150 C -5 -100 -5 -50 0 -10 Z"/>
+      <path d="M0 -10 C 50 -46 65 -120 25 -160 C 8 -110 5 -50 0 -10 Z"/>
+    </g>
+  </g>
+
+  <!-- reception desk -->
+  <g>
+    <rect x="330" y="560" width="940" height="60" rx="6" fill="#dfe7e3"/>
+    <rect x="330" y="612" width="940" height="188" fill="#3f6a5e"/>
+    <rect x="330" y="686" width="940" height="30" fill="#f4f7f6"/>
+    <rect x="330" y="612" width="940" height="12" fill="#2f5449"/>
+
+    <!-- cross + label -->
+    <g transform="translate(560,752)">
+      <rect x="-16" y="-40" width="32" height="80" rx="6" fill="#16a34a"/>
+      <rect x="-40" y="-16" width="80" height="32" rx="6" fill="#16a34a"/>
+    </g>
+    <text x="610" y="765" font-family="Segoe UI, Arial, sans-serif" font-size="42" font-weight="700" fill="#f4f7f6">CLINICA</text>
+  </g>
+
+  <!-- doctor -->
+  <g transform="translate(940,470)">
+    <ellipse cx="0" cy="210" rx="70" ry="14" fill="#000" opacity="0.05"/>
+    <path d="M-60 210 C -66 120 -50 70 0 66 C 50 70 66 120 60 210 Z" fill="#ffffff"/>
+    <rect x="-14" y="96" width="28" height="90" fill="#16a34a" opacity="0.85"/>
+    <circle cx="0" cy="20" r="46" fill="#e9b691"/>
+    <path d="M-46 6 C -50 -34 -20 -56 0 -56 C 24 -56 52 -36 46 8 C 40 -6 30 -22 0 -24 C -26 -22 -40 -8 -46 6 Z" fill="#2b2118"/>
+    <rect x="-38" y="110" width="30" height="70" rx="6" fill="#f4f7f6" stroke="#c7cfcb" stroke-width="3" transform="rotate(-8 -38 110)"/>
+  </g>
+
+  <!-- patient -->
+  <g transform="translate(560,520)">
+    <ellipse cx="0" cy="330" rx="90" ry="16" fill="#000" opacity="0.08"/>
+    <rect x="-34" y="150" width="30" height="180" rx="10" fill="#1f2937"/>
+    <rect x="4" y="150" width="30" height="180" rx="10" fill="#1f2937"/>
+    <path d="M-30 190 l60 0 l14 40 l-24 8 l-10 -22 l-10 22 l-24 -8 Z" fill="#16324a"/>
+    <path d="M-58 30 C -66 100 -60 160 0 166 C 60 160 66 100 58 30 C 50 -8 -50 -8 -58 30 Z" fill="#d9702f"/>
+    <circle cx="0" cy="-30" r="44" fill="#e2ad86"/>
+    <path d="M-44 -46 C -30 -80 30 -80 44 -46 C 44 -60 20 -80 0 -80 C -20 -80 -44 -60 -44 -46 Z" fill="#3a2a1c"/>
+    <path d="M40 10 C 70 20 82 40 78 60 L 60 54 C 58 38 50 22 40 10 Z" fill="#e2ad86"/>
+  </g>
+
+  <rect x="0" y="0" width="1600" height="1000" fill="#ffffff" opacity="0"/>
+</svg>

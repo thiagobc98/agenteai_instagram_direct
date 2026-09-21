@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "secretaria": "./src/whatsapp_langchain/agents/catalog/secretaria/graph.py:graph"
+  },
+  "env": ".env"
+}

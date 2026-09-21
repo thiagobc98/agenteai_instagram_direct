@@ -1,0 +1,108 @@
+.panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.closeButton {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.3rem;
+}
+
+.closeButton:hover {
+  background: var(--surface-alt);
+}
+
+.profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.3rem;
+  padding: 1.5rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.name {
+  margin: 0.4rem 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.section {
+  padding: 1.1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-tertiary);
+  margin-bottom: 0.7rem;
+}
+
+.list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.row dt {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.row dd {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: right;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem !important;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 160px;
+}
+
+@media (max-width: 1024px) {
+  .panel {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 30;
+    box-shadow: var(--shadow-md);
+  }
+}

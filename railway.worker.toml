@@ -1,0 +1,14 @@
+# Config-as-code do serviço "worker" no Railway.
+# Aponte este arquivo em Settings -> Config-as-code Path do serviço.
+# Sem healthcheck (o worker não recebe requisições HTTP) e sem rede
+# pública. Variáveis de ambiente continuam configuradas na dashboard.
+# Ver docs/DEPLOY.md.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.worker"
+watchPatterns = ["src/**", "db/**", "Dockerfile.worker", "pyproject.toml", "uv.lock"]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

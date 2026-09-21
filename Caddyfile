@@ -1,0 +1,25 @@
+# Proxy reverso de produção — TLS automático via Let's Encrypt.
+#
+# {$DOMAIN} deve apontar (registro DNS A) para o IP da VPS antes do primeiro
+# start, para o Caddy conseguir emitir o certificado. Configure DOMAIN e,
+# opcionalmente, ACME_EMAIL no .env usado pelo docker-compose.prod.yml.
+
+{$DOMAIN} {
+	# API e webhooks — encaminhados para o serviço api (porta interna 8000)
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /webhook/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# Tudo mais (admin panel) — encaminhado para o serviço frontend
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

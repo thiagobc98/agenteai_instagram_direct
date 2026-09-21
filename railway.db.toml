@@ -1,0 +1,19 @@
+# Config-as-code do serviço "db" no Railway — publica o mesmo
+# Dockerfile.db (pgvector/pgvector:pg16) usado localmente, garantindo que
+# a extensão pgvector exigida pelas migrações esteja disponível (o plugin
+# "PostgreSQL" padrão do Railway nem sempre inclui pgvector).
+#
+# Aponte este arquivo em Settings -> Config-as-code Path do serviço.
+# Volume persistente (/var/lib/postgresql/data) e variáveis (POSTGRES_DB,
+# POSTGRES_USER, POSTGRES_PASSWORD) continuam configurados na dashboard —
+# sem volume, os dados são perdidos a cada redeploy. Sem rede pública.
+# Ver docs/DEPLOY.md.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.db"
+watchPatterns = ["Dockerfile.db", "db/migrations/**"]
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

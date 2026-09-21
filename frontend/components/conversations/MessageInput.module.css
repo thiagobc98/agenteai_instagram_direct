@@ -1,0 +1,38 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.iconButton {
+  background: transparent;
+  color: var(--text-tertiary);
+  padding: 0.45rem;
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  background: var(--surface-alt);
+  border-color: transparent;
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+}
+
+.sendButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
