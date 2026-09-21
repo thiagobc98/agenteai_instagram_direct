@@ -98,12 +98,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
 ```
 
-## Firewall
+## Firewall e portas
 
-As portas `5432` (db), `6379` (redis), `8000` (api) e `3000` (frontend)
-continuam publicadas no host pelo `docker-compose.yml` (útil para debug
-local). Em produção, feche-as externamente e deixe só `22` (SSH), `80` e
-`443` acessíveis:
+No `docker-compose.yml` (desenvolvimento) as portas `5432` (db), `6379` (redis),
+`8000` (api) e `3000` (frontend) ficam publicadas no host, para facilitar o debug.
+**O `docker-compose.prod.yml` despublica todas elas**: em produção só o proxy
+expõe `80` e `443`, e os serviços conversam pela rede interna do compose.
+
+> ⚠️ Não confie só no `ufw` para proteger portas de containers: o Docker escreve
+> direto no iptables e **ignora** as regras do ufw. Por isso a proteção real é
+> não publicar a porta (o que o override de produção já faz). Sempre suba com
+> os dois arquivos (`-f docker-compose.yml -f docker-compose.prod.yml`).
+
+Use o `ufw` só para o resto do servidor:
 
 ```bash
 sudo ufw allow 22/tcp
@@ -111,6 +118,9 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+Confira de fora, depois do deploy, que só 80/443 respondem
+(`nmap -p 22,80,443,3000,5432,6379,8000 <IP>`).
 
 ## Backup do banco
 
@@ -150,7 +160,7 @@ a stack local, nunca contra produção.
 - login no admin panel funciona; `/api/*` retorna 401 sem sessão
 - rate limit (429) aparece sob carga alta de um mesmo contato (ver stress test)
 - certificado TLS válido emitido pelo Caddy
-- portas internas fechadas no firewall (só 22/80/443 externas)
+- portas internas NÃO publicadas (só 80/443 respondem; confira com `nmap` de fora)
 - `INSTAGRAM_ACCESS_TOKEN` de longa duração com renovação planejada (expira; envio falha com `instagram_token_invalid`)
 - app da Meta em modo Live (App Review aprovado) para atender clientes reais
 - backup agendado no crontab e testado (restore manual)
