@@ -264,11 +264,12 @@ async def build_dashboard(
 
         cur = await conn.execute(
             _sql(f"""
-            SELECT external_id, username, name, profile_pic_url,
+            SELECT external_id, username, name, profile_pic_url, whatsapp,
                    last_message, created_at
             FROM (
                 SELECT DISTINCT ON (m.external_id)
                        m.external_id, c.username, c.name, c.profile_pic_url,
+                       c.whatsapp,
                        COALESCE(NULLIF(m.normalized_input, ''), m.incoming_message)
                            AS last_message,
                        m.created_at
@@ -290,8 +291,9 @@ async def build_dashboard(
                 "username": r[1],
                 "name": r[2],
                 "profile_pic_url": r[3],
-                "last_message": (r[4] or "").strip(),
-                "at": r[5].isoformat() if r[5] else None,
+                "whatsapp": r[4],
+                "last_message": (r[5] or "").strip(),
+                "at": r[6].isoformat() if r[6] else None,
             }
             for r in await cur.fetchall()
         ]

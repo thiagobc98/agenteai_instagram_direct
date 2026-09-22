@@ -1,5 +1,4 @@
-"""Middleware que injeta saudação (bom dia/boa tarde/boa noite) e a
-data/hora atual no system prompt.
+"""Middleware que injeta saudação e contexto dinâmico no system prompt.
 
 O ``system_prompt`` passado ao ``create_agent()`` é fixado uma única vez
 quando o grafo é montado (no boot do Worker) — o horário real do dia
@@ -8,13 +7,20 @@ ficaria congelado nesse instante sem este middleware. O decorator
 ao modelo, então o horário (fuso ``BUSINESS_TIMEZONE``) fica sempre
 correto.
 
-Três situações, decididas em código (não pelo "bom senso" do modelo):
+Três situações de saudação, decididas em código (não pelo "bom senso" do
+modelo):
 
 1. Primeira mensagem da conversa: apresentação completa.
 2. Cliente que já conversou antes e só cumprimentou ("oi", "bom dia"...):
    boas-vindas de volta + pergunta de como ajudar. Nunca só a saudação.
 3. Cliente que já conversou antes e escreveu outra coisa: responde ao
    pedido, sem repetir a apresentação.
+
+Este middleware também anexa a seção "## WhatsApp da cliente"
+(``agents/middleware/handoff_context.py``) na mesma string, em vez de usar um
+segundo middleware ``@dynamic_prompt`` separado: cada middleware desse tipo
+SUBSTITUI o system prompt inteiro (não empilha), então um segundo middleware
+apagaria a saudação do primeiro. Ver `handoff_context.py` para detalhes.
 
 Exemplo:
     from whatsapp_langchain.agents.middleware import create_greeting_middleware
@@ -31,6 +37,7 @@ from zoneinfo import ZoneInfo
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
 from langchain_core.messages import HumanMessage
 
+from whatsapp_langchain.agents.middleware.handoff_context import build_handoff_section
 from whatsapp_langchain.shared.config import settings
 
 # Trechos que compõem um cumprimento (já sem acento e em minúsculas). Se depois
@@ -118,8 +125,9 @@ def build_greeting_prompt(
     is_first_turn: bool,
     last_message: str = "",
     username: str | None = None,
+    customer_whatsapp: str | None = None,
 ) -> str:
-    """Monta o system prompt final com as instruções de saudação.
+    """Monta o system prompt final com saudação e contexto de WhatsApp.
 
     Função pura (sem acesso a relógio ou estado do agente) para ser testável.
 
@@ -131,6 +139,8 @@ def build_greeting_prompt(
         last_message: Texto da mensagem que está sendo respondida.
         username: @ da cliente no Instagram, se já foi salvo (tabela
             `contacts`). Sem ele, a saudação sai sem menção.
+        customer_whatsapp: WhatsApp da cliente já salvo (tabela `contacts`),
+            ou None se ela ainda não informou — ver `handoff_context.py`.
     """
     greeting = _greeting_with_mention(_greeting_word(now.hour), username)
 
@@ -166,7 +176,8 @@ def build_greeting_prompt(
         "## Saudação\n\n"
         f"Agora são {now.strftime('%H:%M')} (horário de "
         f"{settings.business_timezone}).\n\n"
-        f"{instruction}"
+        f"{instruction}\n\n"
+        f"{build_handoff_section(customer_whatsapp)}"
     )
 
 
@@ -196,6 +207,7 @@ def create_greeting_middleware(system_prompt: str, intro: str):
             is_first_turn=human_count <= 1,
             last_message=_last_human_text(messages),
             username=request.state.get("username"),
+            customer_whatsapp=request.state.get("customer_whatsapp"),
         )
 
     return inject_greeting

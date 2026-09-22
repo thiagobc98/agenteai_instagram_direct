@@ -33,7 +33,10 @@ from langgraph.store.base import BaseStore
 from psycopg_pool import AsyncConnectionPool
 
 from whatsapp_langchain.agents.loader import load_graph
-from whatsapp_langchain.shared.contacts import get_contact_username
+from whatsapp_langchain.shared.contacts import (
+    get_contact_username,
+    get_customer_whatsapp,
+)
 from whatsapp_langchain.shared.models import MessageQueue
 from whatsapp_langchain.shared.queue import (
     mark_done,
@@ -143,10 +146,11 @@ async def process_message(
             }
         }
 
-        # @ salvo do contato (tabela `contacts`) para o agente mencionar a
-        # cliente na saudação — ver agents/middleware/greeting.py. Best-effort:
-        # None quando o perfil ainda não foi buscado, não tem username, ou a
-        # consulta falha (não pode atrasar nem derrubar a resposta ao cliente).
+        # @ e WhatsApp salvos do contato (tabela `contacts`), para o agente
+        # mencionar a cliente na saudação e saber se já pode pular a pergunta
+        # de WhatsApp — ver agents/middleware/greeting.py e handoff_context.py.
+        # Best-effort: uma falha na consulta nunca pode atrasar nem derrubar a
+        # resposta ao cliente.
         try:
             username = await get_contact_username(pool, message.external_id)
         except Exception as username_err:
@@ -158,13 +162,28 @@ async def process_message(
             )
             username = None
 
+        try:
+            customer_whatsapp = await get_customer_whatsapp(pool, message.external_id)
+        except Exception as whatsapp_err:
+            logger.warning(
+                "customer_whatsapp_lookup_failed",
+                message_id=message.id,
+                external_id=message.external_id,
+                error=str(whatsapp_err),
+            )
+            customer_whatsapp = None
+
         graph = load_graph(
             message.agent_id,
             checkpointer=checkpointer,
             store=store,
         )
         result = await graph.ainvoke(
-            {"messages": [human_message], "username": username},
+            {
+                "messages": [human_message],
+                "username": username,
+                "customer_whatsapp": customer_whatsapp,
+            },
             config=invoke_config,
         )
 

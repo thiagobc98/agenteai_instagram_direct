@@ -38,6 +38,7 @@ from whatsapp_langchain.agents.tools import (
     list_my_appointments,
     read_memory,
     reschedule_appointment,
+    save_customer_whatsapp,
     save_memory,
 )
 from whatsapp_langchain.shared.config import settings
@@ -55,15 +56,17 @@ STALE_REPLY_MARKERS = ("Dra. Luana Lima",)
 
 
 class SecretariaState(AgentState):
-    """Estado do agente: mensagens + @ da cliente no Instagram.
+    """Estado do agente: mensagens + @ e WhatsApp da cliente.
 
-    `username` é preenchido pelo processor a cada mensagem (tabela `contacts`)
-    e lido pelo middleware de saudação para mencionar a cliente pelo @. Não é
-    um campo acumulativo (sem reducer): cada chamada sobrescreve com o valor
-    atual.
+    `username` e `customer_whatsapp` são preenchidos pelo processor a cada
+    mensagem (tabela `contacts`) e lidos pelo middleware de saudação — o
+    primeiro para mencionar a cliente pelo @, o segundo para o agente saber
+    se já pode pular direto para o encaminhamento à Patrícia. Nenhum dos dois
+    é acumulativo (sem reducer): cada chamada sobrescreve com o valor atual.
     """
 
     username: NotRequired[str | None]
+    customer_whatsapp: NotRequired[str | None]
 
 
 def build_graph(
@@ -111,8 +114,13 @@ def build_graph(
     if enable_memory_tools is None:
         enable_memory_tools = store is not None
 
+    # save_customer_whatsapp: sempre disponível, independe de memória/agenda
+    # (ver "Antes de encaminhar para a Patrícia" em prompts.py)
+    tools = [save_customer_whatsapp]
+
     # Tools de memória — resolvem o store via InjectedStore em runtime
-    tools = [save_memory, read_memory] if enable_memory_tools else []
+    if enable_memory_tools:
+        tools += [save_memory, read_memory]
 
     # Tools de agendamento (Google Calendar) — só habilitadas se configuradas
     if settings.google_calendar_enabled:

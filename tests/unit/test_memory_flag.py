@@ -60,6 +60,11 @@ class TestProcessorMemoryFlag:
                 new_callable=AsyncMock,
                 return_value=None,
             ),
+            patch(
+                "whatsapp_langchain.worker.processor.get_customer_whatsapp",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             mock_graph = AsyncMock()
             mock_graph.ainvoke.return_value = {

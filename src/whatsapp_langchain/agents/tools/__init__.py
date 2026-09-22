@@ -8,11 +8,13 @@ from whatsapp_langchain.agents.tools.calendar import (
     list_my_appointments,
     reschedule_appointment,
 )
+from whatsapp_langchain.agents.tools.handoff import save_customer_whatsapp
 from whatsapp_langchain.agents.tools.memory import read_memory, save_memory
 
 __all__ = [
     "read_memory",
     "save_memory",
+    "save_customer_whatsapp",
     "get_current_date",
     "check_availability",
     "book_appointment",

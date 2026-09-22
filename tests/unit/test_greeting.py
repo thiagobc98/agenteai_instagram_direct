@@ -21,7 +21,12 @@ def at(hour: int) -> datetime:
 
 
 def prompt(
-    hour: int, *, first: bool, last: str = "", username: str | None = None
+    hour: int,
+    *,
+    first: bool,
+    last: str = "",
+    username: str | None = None,
+    customer_whatsapp: str | None = None,
 ) -> str:
     return build_greeting_prompt(
         BASE,
@@ -30,6 +35,7 @@ def prompt(
         is_first_turn=first,
         last_message=last,
         username=username,
+        customer_whatsapp=customer_whatsapp,
     )
 
 
@@ -166,3 +172,23 @@ class TestReturningCustomer:
         text = prompt(15, first=False, last="tem o 37?", username="_thibec")
 
         assert '"Boa tarde, @_thibec!"' in text
+
+
+class TestHandoffSectionInGreetingPrompt:
+    """A seção "## WhatsApp da cliente" vem sempre anexada ao final."""
+
+    def test_appends_the_ask_first_instruction_by_default(self):
+        text = prompt(15, first=True, last="Oi")
+
+        assert "## WhatsApp da cliente" in text
+        assert "NÃO tem o WhatsApp desta cliente" in text
+
+    def test_appends_the_already_has_it_instruction_when_known(self):
+        text = prompt(15, first=False, last="Oi", customer_whatsapp="5531999998888")
+
+        assert "JÁ TEM o WhatsApp desta cliente" in text
+
+    def test_handoff_section_comes_after_the_greeting_instruction(self):
+        text = prompt(15, first=True, last="Oi")
+
+        assert text.index("## Saudação") < text.index("## WhatsApp da cliente")

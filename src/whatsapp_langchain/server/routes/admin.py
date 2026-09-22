@@ -60,7 +60,7 @@ async def get_chats(
             """
             SELECT v.external_id, v.agent_id, v.thread_id, v.last_message,
                    v.last_message_at, v.message_count, v.created_at,
-                   c.username, c.name, c.profile_pic_url
+                   c.username, c.name, c.profile_pic_url, c.whatsapp
             FROM conversations v
             LEFT JOIN contacts c ON c.external_id = v.external_id
             ORDER BY v.last_message_at DESC
@@ -87,6 +87,7 @@ async def get_chats(
             "username": row[7],
             "name": row[8],
             "profile_pic_url": row[9],
+            "whatsapp": row[10],
         }
         for row in rows
     ]
@@ -130,7 +131,7 @@ async def get_chat_messages(
 
         cursor = await conn.execute(
             """
-            SELECT username, name, profile_pic_url
+            SELECT username, name, profile_pic_url, whatsapp
             FROM contacts WHERE external_id = %s
             """,
             (external_id,),
@@ -160,6 +161,7 @@ async def get_chat_messages(
         "username": contact[0] if contact else None,
         "name": contact[1] if contact else None,
         "profile_pic_url": contact[2] if contact else None,
+        "whatsapp": contact[3] if contact else None,
         "messages": messages,
     }
 

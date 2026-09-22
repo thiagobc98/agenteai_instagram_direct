@@ -70,6 +70,17 @@ def mock_get_username():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def mock_get_customer_whatsapp():
+    """Por padrão, cliente sem WhatsApp salvo (não afeta os demais testes)."""
+    with patch(
+        "whatsapp_langchain.worker.processor.get_customer_whatsapp",
+        new_callable=AsyncMock,
+        return_value=None,
+    ) as mock:
+        yield mock
+
+
 # --- Helpers ---
 
 
@@ -479,6 +490,95 @@ class TestInstagramChannel:
 
         state_input = mock_graph.ainvoke.await_args.args[0]
         assert state_input["username"] is None
+
+    async def test_agent_receives_the_saved_customer_whatsapp(
+        self, message, mock_instagram, mock_get_customer_whatsapp
+    ):
+        """O WhatsApp salvo (tabela contacts) chega ao estado do grafo."""
+        mock_get_customer_whatsapp.return_value = "5531999998888"
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+            pool = AsyncMock()
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                pool,
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        mock_get_customer_whatsapp.assert_awaited_once_with(pool, "17841400000000001")
+        state_input = mock_graph.ainvoke.await_args.args[0]
+        assert state_input["customer_whatsapp"] == "5531999998888"
+
+    async def test_agent_receives_none_when_whatsapp_not_saved_yet(
+        self, message, mock_instagram
+    ):
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        state_input = mock_graph.ainvoke.await_args.args[0]
+        assert state_input["customer_whatsapp"] is None
+
+    async def test_whatsapp_lookup_failure_does_not_break_processing(
+        self, message, mock_instagram, mock_get_customer_whatsapp
+    ):
+        """Falha na consulta é best-effort: mensagem ainda é respondida."""
+        mock_get_customer_whatsapp.side_effect = RuntimeError("db indisponível")
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2] as mock_done,
+            patches[3] as mock_failed,
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        state_input = mock_graph.ainvoke.await_args.args[0]
+        assert state_input["customer_whatsapp"] is None
+        mock_done.assert_awaited_once()
+        mock_failed.assert_not_awaited()
 
     async def test_window_closed_send_error_goes_to_retry_flow(
         self, message, mock_instagram
