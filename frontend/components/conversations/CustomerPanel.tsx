@@ -1,7 +1,14 @@
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { contactLabel, formatAgentName, formatDateTime, relativeTime } from "../../lib/format";
-import { IconX } from "../icons";
+import {
+  contactLabel,
+  formatAgentName,
+  formatDateTime,
+  formatWhatsapp,
+  relativeTime,
+  whatsappLink,
+} from "../../lib/format";
+import { IconPhone, IconX } from "../icons";
 import styles from "./CustomerPanel.module.css";
 
 export default function CustomerPanel({
@@ -47,6 +54,21 @@ export default function CustomerPanel({
         </p>
       ) : (
         <>
+          {chat.whatsapp && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Contato</span>
+              <a
+                href={whatsappLink(chat.whatsapp) ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.whatsappLink}
+              >
+                <IconPhone size={16} />
+                {formatWhatsapp(chat.whatsapp)}
+              </a>
+            </div>
+          )}
+
           <div className={styles.section}>
             <span className={styles.sectionTitle}>Atendimento</span>
             <dl className={styles.list}>

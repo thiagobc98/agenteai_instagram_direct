@@ -56,6 +56,7 @@ export interface Chat {
   username: string | null;
   name: string | null;
   profile_pic_url: string | null;
+  whatsapp: string | null;
 }
 
 export interface ChatListResponse {
@@ -85,6 +86,7 @@ export interface ChatMessagesResponse {
   username: string | null;
   name: string | null;
   profile_pic_url: string | null;
+  whatsapp: string | null;
   messages: ChatMessage[];
 }
 
@@ -102,6 +104,7 @@ export interface HandoffContact {
   username: string | null;
   name: string | null;
   profile_pic_url: string | null;
+  whatsapp: string | null;
   last_message: string | null;
   at: string | null;
 }

@@ -90,6 +90,22 @@
   text-align: right;
 }
 
+.whatsappLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #1a9a4b;
+  background: #e7f7ee;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.whatsappLink:hover {
+  background: #d3f0e0;
+}
+
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem !important;

@@ -141,3 +141,17 @@ export function formatShortDate(isoDate: string): string {
   const [, month, day] = isoDate.split("-");
   return `${day}/${month}`;
 }
+
+// ---------- WhatsApp da cliente (coletado pelo agente antes do encaminhamento) ----------
+
+// Vem do backend normalizado: só dígitos, com o 55 do Brasil na frente
+// (ex: "5531999998888") — pronto para um link "https://wa.me/<numero>".
+export function whatsappLink(whatsapp: string | null): string | null {
+  return whatsapp ? `https://wa.me/${whatsapp}` : null;
+}
+
+// Reaproveita a formatação de telefone de formatContactId (mesmo formato
+// "+55 (DDD) NNNNN-NNNN" que já usamos para o WhatsApp herdado do WhatsApp).
+export function formatWhatsapp(whatsapp: string | null): string | null {
+  return whatsapp ? formatContactId(`+${whatsapp}`) : null;
+}

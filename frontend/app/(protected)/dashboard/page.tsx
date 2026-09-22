@@ -11,6 +11,7 @@ import {
   formatNumber,
   formatShortDate,
   relativeTime,
+  whatsappLink,
 } from "../../../lib/format";
 import Avatar from "../../../components/Avatar";
 import KpiCard from "../../../components/KpiCard";
@@ -336,10 +337,10 @@ export default function DashboardPage() {
               ) : (
                 <ul className={styles.queue}>
                   {data.handoff_queue.map((c) => (
-                    <li key={c.external_id}>
+                    <li key={c.external_id} className={styles.queueItem}>
                       <Link
                         href={`/chats/${encodeURIComponent(c.external_id)}`}
-                        className={styles.queueItem}
+                        className={styles.queueLink}
                       >
                         <Avatar seed={c.external_id} size={38} src={c.profile_pic_url} />
                         <div className={styles.queueBody}>
@@ -350,6 +351,17 @@ export default function DashboardPage() {
                         </div>
                         <span className={styles.queueTime}>{relativeTime(c.at)}</span>
                       </Link>
+                      {whatsappLink(c.whatsapp) && (
+                        <a
+                          href={whatsappLink(c.whatsapp) ?? undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={styles.queueWhatsapp}
+                          title="Chamar no WhatsApp"
+                        >
+                          <IconPhone size={15} />
+                        </a>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -38,6 +38,21 @@
   color: var(--text-secondary);
 }
 
+.whatsappButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e7f7ee;
+  color: #1a9a4b;
+  padding: 0.45rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.whatsappButton:hover {
+  background: #d3f0e0;
+}
+
 .infoButton {
   background: transparent;
   color: var(--text-secondary);

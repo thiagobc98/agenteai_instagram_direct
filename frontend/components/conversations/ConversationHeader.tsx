@@ -1,8 +1,13 @@
 import Link from "next/link";
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { contactLabel, formatAgentName, relativeTime } from "../../lib/format";
-import { IconArrowLeft, IconInfo } from "../icons";
+import {
+  contactLabel,
+  formatAgentName,
+  relativeTime,
+  whatsappLink,
+} from "../../lib/format";
+import { IconArrowLeft, IconInfo, IconPhone } from "../icons";
 import styles from "./ConversationHeader.module.css";
 
 export default function ConversationHeader({
@@ -39,6 +44,18 @@ export default function ConversationHeader({
           )}
         </p>
       </div>
+
+      {chat && whatsappLink(chat.whatsapp) && (
+        <a
+          href={whatsappLink(chat.whatsapp) ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className={styles.whatsappButton}
+          title="Chamar no WhatsApp"
+        >
+          <IconPhone size={17} />
+        </a>
+      )}
 
       <button
         className={`${styles.infoButton} ${infoOpen ? styles.infoButtonActive : ""}`}
