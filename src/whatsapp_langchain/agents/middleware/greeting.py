@@ -35,7 +35,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from langchain.agents.middleware import ModelRequest, dynamic_prompt
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from whatsapp_langchain.agents.middleware.handoff_context import build_handoff_section
 from whatsapp_langchain.shared.config import settings
@@ -104,6 +104,23 @@ def is_greeting_only(text: str) -> bool:
     return not _GREETING_RE.sub(" ", plain).strip()
 
 
+def _whatsapp_ask_count(messages: list) -> int:
+    """Conta quantas respostas do bot já pediram o WhatsApp da cliente.
+
+    Contado em código (não pelo modelo) para decidir de forma confiável
+    quando desistir de insistir — ver `handoff_context.py`.
+    """
+    count = 0
+    for message in messages:
+        if not isinstance(message, AIMessage):
+            continue
+        content = message.content
+        text = content if isinstance(content, str) else str(content)
+        if "whatsapp" in text.lower():
+            count += 1
+    return count
+
+
 def _last_human_text(messages: list) -> str:
     for message in reversed(messages):
         if isinstance(message, HumanMessage):
@@ -126,6 +143,7 @@ def build_greeting_prompt(
     last_message: str = "",
     username: str | None = None,
     customer_whatsapp: str | None = None,
+    whatsapp_ask_count: int = 0,
 ) -> str:
     """Monta o system prompt final com saudação e contexto de WhatsApp.
 
@@ -141,6 +159,8 @@ def build_greeting_prompt(
             `contacts`). Sem ele, a saudação sai sem menção.
         customer_whatsapp: WhatsApp da cliente já salvo (tabela `contacts`),
             ou None se ela ainda não informou — ver `handoff_context.py`.
+        whatsapp_ask_count: Quantas vezes o bot já pediu o WhatsApp nesta
+            conversa (contado em código) — ver `handoff_context.py`.
     """
     greeting = _greeting_with_mention(_greeting_word(now.hour), username)
 
@@ -177,7 +197,7 @@ def build_greeting_prompt(
         f"Agora são {now.strftime('%H:%M')} (horário de "
         f"{settings.business_timezone}).\n\n"
         f"{instruction}\n\n"
-        f"{build_handoff_section(customer_whatsapp)}"
+        f"{build_handoff_section(customer_whatsapp, whatsapp_ask_count)}"
     )
 
 
@@ -208,6 +228,7 @@ def create_greeting_middleware(system_prompt: str, intro: str):
             last_message=_last_human_text(messages),
             username=request.state.get("username"),
             customer_whatsapp=request.state.get("customer_whatsapp"),
+            whatsapp_ask_count=_whatsapp_ask_count(messages),
         )
 
     return inject_greeting

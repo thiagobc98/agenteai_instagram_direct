@@ -8,6 +8,7 @@ from whatsapp_langchain.agents.catalog.secretaria.agent import GREETING_INTRO
 from whatsapp_langchain.agents.middleware.greeting import (
     _greeting_with_mention,
     _greeting_word,
+    _whatsapp_ask_count,
     build_greeting_prompt,
     is_greeting_only,
 )
@@ -27,6 +28,7 @@ def prompt(
     last: str = "",
     username: str | None = None,
     customer_whatsapp: str | None = None,
+    whatsapp_ask_count: int = 0,
 ) -> str:
     return build_greeting_prompt(
         BASE,
@@ -36,6 +38,7 @@ def prompt(
         last_message=last,
         username=username,
         customer_whatsapp=customer_whatsapp,
+        whatsapp_ask_count=whatsapp_ask_count,
     )
 
 
@@ -192,3 +195,34 @@ class TestHandoffSectionInGreetingPrompt:
         text = prompt(15, first=True, last="Oi")
 
         assert text.index("## Saudação") < text.index("## WhatsApp da cliente")
+
+    def test_appends_the_give_up_instruction_after_max_asks(self):
+        text = prompt(15, first=False, last="não vou passar", whatsapp_ask_count=2)
+
+        assert "NÃO peça de novo" in text
+        assert "desista" in text.lower()
+
+
+class TestWhatsappAskCount:
+    def test_counts_ai_messages_mentioning_whatsapp(self):
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        messages = [
+            HumanMessage("Quanto custa?"),
+            AIMessage("Me passa seu WhatsApp com DDD?"),
+            HumanMessage("não quero"),
+            AIMessage("Consigo saber seu whatsapp pra Patrícia te chamar?"),
+            HumanMessage("não"),
+        ]
+
+        assert _whatsapp_ask_count(messages) == 2
+
+    def test_ignores_messages_that_do_not_mention_whatsapp(self):
+        from langchain_core.messages import AIMessage, HumanMessage
+
+        messages = [HumanMessage("Oi"), AIMessage("Boa tarde! Como posso ajudar?")]
+
+        assert _whatsapp_ask_count(messages) == 0
+
+    def test_empty_history_has_zero_asks(self):
+        assert _whatsapp_ask_count([]) == 0
