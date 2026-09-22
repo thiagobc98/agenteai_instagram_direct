@@ -6,6 +6,7 @@ import pytest
 
 from whatsapp_langchain.agents.catalog.secretaria.agent import GREETING_INTRO
 from whatsapp_langchain.agents.middleware.greeting import (
+    _greeting_with_mention,
     _greeting_word,
     build_greeting_prompt,
     is_greeting_only,
@@ -19,9 +20,16 @@ def at(hour: int) -> datetime:
     return datetime(2026, 9, 21, hour, 30)
 
 
-def prompt(hour: int, *, first: bool, last: str = "") -> str:
+def prompt(
+    hour: int, *, first: bool, last: str = "", username: str | None = None
+) -> str:
     return build_greeting_prompt(
-        BASE, INTRO, at(hour), is_first_turn=first, last_message=last
+        BASE,
+        INTRO,
+        at(hour),
+        is_first_turn=first,
+        last_message=last,
+        username=username,
     )
 
 
@@ -79,6 +87,20 @@ class TestIsGreetingOnly:
         assert not is_greeting_only(text)
 
 
+class TestGreetingWithMention:
+    def test_no_username_keeps_plain_greeting(self):
+        assert _greeting_with_mention("Boa tarde", None) == "Boa tarde"
+
+    def test_appends_at_username(self):
+        assert _greeting_with_mention("Boa tarde", "_thibec") == "Boa tarde, @_thibec"
+
+    def test_strips_a_leading_at_to_avoid_doubling_it(self):
+        assert _greeting_with_mention("Boa tarde", "@_thibec") == "Boa tarde, @_thibec"
+
+    def test_empty_username_keeps_plain_greeting(self):
+        assert _greeting_with_mention("Boa tarde", "") == "Boa tarde"
+
+
 class TestFirstTurn:
     def test_introduces_the_agent(self):
         text = prompt(15, first=True, last="Oi")
@@ -86,6 +108,11 @@ class TestFirstTurn:
         assert text.startswith(BASE)
         assert f'"Boa tarde! {INTRO}, seja bem-vinda.' in text
         assert "15:30" in text
+
+    def test_mentions_the_username_when_known(self):
+        text = prompt(15, first=True, last="Oi", username="_thibec")
+
+        assert f'"Boa tarde, @_thibec! {INTRO}, seja bem-vinda.' in text
 
     def test_has_no_clinic_leftovers(self):
         text = build_greeting_prompt(
@@ -129,3 +156,13 @@ class TestReturningCustomer:
 
         for word in ("Luana", "Dra.", "paciente", "consulta", "secretária"):
             assert word not in text
+
+    def test_welcome_back_mentions_the_username_when_known(self):
+        text = prompt(15, first=False, last="Oi", username="_thibec")
+
+        assert '"Boa tarde, @_thibec! Que bom falar com você de novo' in text
+
+    def test_request_reply_mentions_the_username_when_known(self):
+        text = prompt(15, first=False, last="tem o 37?", username="_thibec")
+
+        assert '"Boa tarde, @_thibec!"' in text

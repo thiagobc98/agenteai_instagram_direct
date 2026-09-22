@@ -40,6 +40,24 @@ async def upsert_contact(
         await conn.commit()
 
 
+async def get_contact_username(
+    pool: AsyncConnectionPool, external_id: str
+) -> str | None:
+    """@username salvo do contato, se o perfil já foi buscado.
+
+    Usado pelo Worker para mencionar a cliente pelo @ na saudação (ver
+    `agents/middleware/greeting.py`). None quando o contato ainda não tem
+    perfil salvo ou o perfil não tinha username.
+    """
+    async with pool.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT username FROM contacts WHERE external_id = %s",
+            (external_id,),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
 async def needs_profile_refresh(pool: AsyncConnectionPool, external_id: str) -> bool:
     """True se o contato não tem perfil salvo ou o perfil está desatualizado."""
     async with pool.connection() as conn:

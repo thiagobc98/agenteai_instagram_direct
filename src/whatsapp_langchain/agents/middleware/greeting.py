@@ -70,6 +70,17 @@ def _greeting_word(hour: int) -> str:
     return "Boa noite"
 
 
+def _greeting_with_mention(greeting: str, username: str | None) -> str:
+    """ "Boa tarde" -> "Boa tarde, @fulana" quando o @ da cliente é conhecido.
+
+    Montado em código, não pelo modelo: o @ vem direto da tabela `contacts`
+    (perfil real do Instagram), então não tem como sair errado ou inventado.
+    """
+    if not username:
+        return greeting
+    return f"{greeting}, @{username.lstrip('@')}"
+
+
 def is_greeting_only(text: str) -> bool:
     """True se a mensagem é apenas um cumprimento (sem pergunta nem pedido).
 
@@ -106,6 +117,7 @@ def build_greeting_prompt(
     *,
     is_first_turn: bool,
     last_message: str = "",
+    username: str | None = None,
 ) -> str:
     """Monta o system prompt final com as instruções de saudação.
 
@@ -117,8 +129,10 @@ def build_greeting_prompt(
         now: Data/hora local da loja.
         is_first_turn: True se é a primeira mensagem da cliente na conversa.
         last_message: Texto da mensagem que está sendo respondida.
+        username: @ da cliente no Instagram, se já foi salvo (tabela
+            `contacts`). Sem ele, a saudação sai sem menção.
     """
-    greeting = _greeting_word(now.hour)
+    greeting = _greeting_with_mention(_greeting_word(now.hour), username)
 
     if is_first_turn:
         instruction = (
@@ -181,6 +195,7 @@ def create_greeting_middleware(system_prompt: str, intro: str):
             now,
             is_first_turn=human_count <= 1,
             last_message=_last_human_text(messages),
+            username=request.state.get("username"),
         )
 
     return inject_greeting

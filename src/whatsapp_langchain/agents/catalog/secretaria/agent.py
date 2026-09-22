@@ -18,7 +18,10 @@ Configuração via .env:
     MEMORY_ENABLED=true                # Habilita memória semântica
 """
 
+from typing import NotRequired
+
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentState
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 
@@ -49,6 +52,18 @@ GREETING_INTRO = "Aqui quem fala é a Juliana, atendente virtual da Patricia Ber
 # estão no histórico salvo das conversas. São escondidos do modelo para ele não
 # imitar a persona errada.
 STALE_REPLY_MARKERS = ("Dra. Luana Lima",)
+
+
+class SecretariaState(AgentState):
+    """Estado do agente: mensagens + @ da cliente no Instagram.
+
+    `username` é preenchido pelo processor a cada mensagem (tabela `contacts`)
+    e lido pelo middleware de saudação para mencionar a cliente pelo @. Não é
+    um campo acumulativo (sem reducer): cada chamada sobrescreve com o valor
+    atual.
+    """
+
+    username: NotRequired[str | None]
 
 
 def build_graph(
@@ -115,6 +130,7 @@ def build_graph(
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,
+        state_schema=SecretariaState,
         checkpointer=checkpointer,
         store=store,
     )

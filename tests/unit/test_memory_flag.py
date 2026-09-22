@@ -55,6 +55,11 @@ class TestProcessorMemoryFlag:
                 "whatsapp_langchain.worker.processor.upsert_conversation",
                 new_callable=AsyncMock,
             ),
+            patch(
+                "whatsapp_langchain.worker.processor.get_contact_username",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             mock_graph = AsyncMock()
             mock_graph.ainvoke.return_value = {

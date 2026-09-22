@@ -56,6 +56,20 @@ def mock_instagram():
     return instagram
 
 
+# --- Fixtures ---
+
+
+@pytest.fixture(autouse=True)
+def mock_get_username():
+    """Por padrão, contato sem @ salvo (não afeta os testes que não olham isso)."""
+    with patch(
+        "whatsapp_langchain.worker.processor.get_contact_username",
+        new_callable=AsyncMock,
+        return_value=None,
+    ) as mock:
+        yield mock
+
+
 # --- Helpers ---
 
 
@@ -407,6 +421,64 @@ class TestInstagramChannel:
             "thread_id": "17841400000000001:secretaria",
             "user_id": "17841400000000001",
         }
+
+    async def test_agent_receives_the_contact_username_for_the_greeting(
+        self, message, mock_instagram, mock_get_username
+    ):
+        """O @ salvo do contato (tabela contacts) chega ao estado do grafo."""
+        mock_get_username.return_value = "_thibec"
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+            pool = AsyncMock()
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                pool,
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        mock_get_username.assert_awaited_once_with(pool, "17841400000000001")
+        state_input = mock_graph.ainvoke.await_args.args[0]
+        assert state_input["username"] == "_thibec"
+
+    async def test_agent_receives_none_when_contact_has_no_username_yet(
+        self, message, mock_instagram
+    ):
+        patches = _patch_processor(TEXT_PREPROCESS)
+        with (
+            patches[0],
+            patches[1] as mock_load,
+            patches[2],
+            patches[3],
+            patches[4],
+        ):
+            mock_graph = AsyncMock()
+            mock_graph.ainvoke.return_value = {"messages": [MagicMock(content="Oi")]}
+            mock_load.return_value = mock_graph
+
+            from whatsapp_langchain.worker.processor import process_message
+
+            await process_message(
+                message,
+                AsyncMock(),
+                checkpointer=AsyncMock(),
+                instagram=mock_instagram,
+            )
+
+        state_input = mock_graph.ainvoke.await_args.args[0]
+        assert state_input["username"] is None
 
     async def test_window_closed_send_error_goes_to_retry_flow(
         self, message, mock_instagram
