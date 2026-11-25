@@ -1,0 +1,47 @@
+.banner {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-md);
+  font-size: 0.87rem;
+  line-height: 1.45;
+}
+
+p.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.ok {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.warn {
+  background: var(--warning-light);
+  color: #7a4a06;
+}
+
+.warnInline {
+  color: #7a4a06;
+}
+
+.bannerTitle {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+.bannerText {
+  margin: 0.3rem 0 0;
+}
+
+.banner code {
+  font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+}

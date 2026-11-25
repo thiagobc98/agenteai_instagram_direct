@@ -6,7 +6,7 @@ Todos os modelos usam Pydantic v2 para validação e serialização.
 Uso:
     from whatsapp_langchain.shared.models import MessageQueue, MessageStatus
 
-    msg = MessageQueue(phone_number="+5511999999999", agent_id="secretaria", ...)
+    msg = MessageQueue(external_id="17841400000000000", agent_id="secretaria", ...)
 """
 
 from datetime import UTC, datetime
@@ -36,10 +36,12 @@ class MessageQueue(BaseModel):
 
     id: int
     message_id: str | None = None
-    phone_number: str = Field(description="Formato E.164, ex: +5511999999999")
-    to_number: str | None = None
+    external_id: str = Field(description="IGSID do remetente no Instagram")
+    to_id: str | None = None
     agent_id: str = Field(description="Identificador do agente em langgraph.json")
-    thread_id: str = Field(description="ID do thread para checkpointer: phone:agent_id")
+    thread_id: str = Field(
+        description="ID do thread para checkpointer: external_id:agent_id"
+    )
     incoming_message: str
     media_url: str | None = None
     media_base64: str | None = None
@@ -62,12 +64,12 @@ class MessageQueue(BaseModel):
 class Conversation(BaseModel):
     """Mapeamento da tabela conversations.
 
-    Agrega dados de uma conversa entre um telefone e um agente.
+    Agrega dados de uma conversa entre um contato (IGSID) e um agente.
     Atualizada a cada mensagem processada.
     """
 
     id: int
-    phone_number: str
+    external_id: str
     agent_id: str
     thread_id: str
     last_message: str

@@ -4,6 +4,10 @@ Regra arquitetural:
 - O agente sempre recebe texto.
 - Se mídia está desabilitada ou falha no pré-processamento, a mensagem não
   chega ao agente e uma resposta automática é enviada ao usuário.
+
+A mídia chega por URL (Instagram: `message.attachments[].payload.url`, baixada
+aqui) ou em base64 (embutida no payload). Os dois caminhos convergem nos
+mesmos bytes + MIME type antes de ir ao modelo multimodal.
 """
 
 from __future__ import annotations
@@ -35,6 +39,16 @@ AUTO_RESPONSE_UNSUPPORTED_MEDIA = (
     "Este tipo de mídia não é suportado no momento. Por favor, mande mensagem de texto."
 )
 
+# Download de mídia por URL (attachments do Instagram).
+MEDIA_DOWNLOAD_TIMEOUT_SECONDS = 20.0
+MAX_MEDIA_DOWNLOAD_BYTES = 16 * 1024 * 1024
+# MIME assumido quando o servidor da URL não informa um Content-Type útil.
+_DEFAULT_MIME_BY_KIND = {"image": "image/jpeg", "audio": "audio/mp4"}
+
+
+class MediaDownloadError(Exception):
+    """Falha ao baixar a mídia de uma URL (expirada, grande demais, erro HTTP)."""
+
 
 @dataclass
 class MediaPreprocessResult:
@@ -48,8 +62,80 @@ class MediaPreprocessResult:
 
 
 def decode_media_base64(data: str) -> bytes:
-    """Decodifica mídia recebida em base64 (Evolution API, webhookBase64=true)."""
+    """Decodifica mídia recebida em base64 embutido no payload."""
     return base64.b64decode(data)
+
+
+async def download_media(url: str) -> tuple[bytes, str | None]:
+    """Baixa a mídia de uma URL (attachment do Instagram).
+
+    A URL vem de um webhook já validado pela assinatura da Meta, mas mesmo
+    assim só aceitamos https e limitamos o tamanho e o tempo de download.
+
+    Args:
+        url: URL do attachment.
+
+    Returns:
+        (bytes, content_type) — content_type sem parâmetros (ex: "image/jpeg"),
+        ou None se o servidor não informou.
+
+    Raises:
+        MediaDownloadError: URL inválida, expirada (403/404/410), erro HTTP,
+            timeout ou arquivo acima de MAX_MEDIA_DOWNLOAD_BYTES.
+    """
+    if not url.lower().startswith("https://"):
+        raise MediaDownloadError("URL de mídia inválida (esperado https)")
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            async with client.stream(
+                "GET", url, timeout=MEDIA_DOWNLOAD_TIMEOUT_SECONDS
+            ) as response:
+                if response.status_code in (403, 404, 410):
+                    raise MediaDownloadError(
+                        "URL de mídia expirada ou inacessível "
+                        f"(HTTP {response.status_code})"
+                    )
+                if not response.is_success:
+                    raise MediaDownloadError(
+                        f"Falha ao baixar mídia (HTTP {response.status_code})"
+                    )
+
+                declared = response.headers.get("content-length")
+                if (
+                    declared
+                    and declared.isdigit()
+                    and int(declared) > MAX_MEDIA_DOWNLOAD_BYTES
+                ):
+                    raise MediaDownloadError("Mídia acima do tamanho máximo")
+
+                data = bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > MAX_MEDIA_DOWNLOAD_BYTES:
+                        raise MediaDownloadError("Mídia acima do tamanho máximo")
+
+                content_type = response.headers.get("content-type")
+    except httpx.HTTPError as exc:
+        raise MediaDownloadError(f"Falha ao baixar mídia: {exc}") from exc
+
+    if content_type:
+        content_type = content_type.split(";")[0].strip().lower() or None
+    return bytes(data), content_type
+
+
+def _resolve_media_type(kind: str, hint: str, content_type: str | None) -> str:
+    """Escolhe o MIME real da mídia baixada.
+
+    Prefere o Content-Type do servidor quando é do tipo esperado
+    (imagem/áudio); senão usa o `hint` se já for um MIME específico; por fim
+    cai no padrão do tipo.
+    """
+    if content_type and content_type.startswith(f"{kind}/"):
+        return content_type
+    if hint.startswith(f"{kind}/") and not hint.endswith("/*"):
+        return hint
+    return _DEFAULT_MIME_BY_KIND[kind]
 
 
 def _media_kind(media_type: str | None) -> str:
@@ -69,6 +155,10 @@ def _audio_format_from_media_type(media_type: str) -> str:
         return "wav"
     if "mpeg" in m or "mp3" in m:
         return "mp3"
+    if "aac" in m:
+        return "aac"
+    if "mp4" in m or "m4a" in m:
+        return "m4a"
     if "ogg" in m:
         return "ogg"
     if "webm" in m:
@@ -199,9 +289,15 @@ async def preprocess_incoming_message(
     body: str,
     media_base64: str | None = None,
     media_type: str | None = None,
+    media_url: str | None = None,
 ) -> MediaPreprocessResult:
-    """Normaliza entrada para texto antes da chamada ao agente."""
-    if not media_base64 and not media_type:
+    """Normaliza entrada para texto antes da chamada ao agente.
+
+    A mídia pode vir em base64 (`media_base64`) ou por URL (`media_url`, baixada
+    aqui). `media_type` é o MIME — para URLs, pode ser um MIME genérico como
+    "image/*", refinado pelo Content-Type do download.
+    """
+    if not media_base64 and not media_url and not media_type:
         return MediaPreprocessResult(
             should_invoke_agent=True,
             normalized_text=body,
@@ -209,7 +305,7 @@ async def preprocess_incoming_message(
         )
 
     # Payload de mídia incompleto: não invoca agente.
-    if not media_base64 or not media_type:
+    if not (media_base64 or media_url) or not media_type:
         return MediaPreprocessResult(
             should_invoke_agent=False,
             normalized_text=None,
@@ -244,7 +340,12 @@ async def preprocess_incoming_message(
         )
 
     try:
-        media_bytes = decode_media_base64(media_base64)
+        if media_base64:
+            media_bytes = decode_media_base64(media_base64)
+        else:
+            assert media_url is not None
+            media_bytes, content_type = await download_media(media_url)
+            media_type = _resolve_media_type(kind, media_type, content_type)
 
         if kind == "image":
             description = await _describe_image(media_bytes, media_type)
@@ -296,12 +397,14 @@ async def build_human_message(
     body: str,
     media_base64: str | None = None,
     media_type: str | None = None,
+    media_url: str | None = None,
 ) -> HumanMessage:
     """Compatibilidade: retorna HumanMessage de texto (sem multimodal)."""
     pre = await preprocess_incoming_message(
         body=body,
         media_base64=media_base64,
         media_type=media_type,
+        media_url=media_url,
     )
     text = pre.normalized_text or body or pre.auto_response or ""
     return HumanMessage(content=text)

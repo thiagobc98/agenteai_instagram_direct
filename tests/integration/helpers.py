@@ -8,6 +8,9 @@ Pré-requisito: stack Docker rodando (make up).
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import os
 import time
 import uuid
@@ -47,9 +50,9 @@ def get_admin_client(timeout: int = 10) -> httpx.Client:
     return client
 
 
-def unique_phone(ddd: str = "99") -> str:
-    """Gera número de telefone único para isolamento entre testes."""
-    return f"+55{ddd}{uuid.uuid4().int % 10**8:08d}"
+def unique_igsid() -> str:
+    """Gera um IGSID fictício único para isolamento entre testes."""
+    return f"1784{uuid.uuid4().int % 10**13:013d}"
 
 
 def unique_sid(prefix: str = "MSG") -> str:
@@ -79,7 +82,7 @@ def query_message_status(db_url: str, message_sid: str) -> tuple | None:
             return cur.fetchone()
 
 
-def query_conversation(db_url: str, phone_number: str, agent_id: str) -> tuple | None:
+def query_conversation(db_url: str, external_id: str, agent_id: str) -> tuple | None:
     """Busca dados da conversa: message_count, last_message, thread_id."""
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
@@ -87,20 +90,20 @@ def query_conversation(db_url: str, phone_number: str, agent_id: str) -> tuple |
                 """
                 SELECT message_count, last_message, thread_id
                 FROM conversations
-                WHERE phone_number = %s AND agent_id = %s
+                WHERE external_id = %s AND agent_id = %s
                 """,
-                (phone_number, agent_id),
+                (external_id, agent_id),
             )
             return cur.fetchone()
 
 
 def count_queue_entries(
     db_url: str,
-    phone_number: str,
+    external_id: str,
     agent_id: str,
     status: str | None = None,
 ) -> int:
-    """Conta entradas na fila para um phone+agent, opcionalmente filtrado por status."""
+    """Conta entradas na fila de um external_id+agent (filtro opcional de status)."""
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
             if status:
@@ -108,24 +111,24 @@ def count_queue_entries(
                     """
                     SELECT COUNT(*)
                     FROM message_queue
-                    WHERE phone_number = %s AND agent_id = %s AND status = %s
+                    WHERE external_id = %s AND agent_id = %s AND status = %s
                     """,
-                    (phone_number, agent_id, status),
+                    (external_id, agent_id, status),
                 )
             else:
                 cur.execute(
                     """
                     SELECT COUNT(*)
                     FROM message_queue
-                    WHERE phone_number = %s AND agent_id = %s
+                    WHERE external_id = %s AND agent_id = %s
                     """,
-                    (phone_number, agent_id),
+                    (external_id, agent_id),
                 )
             row = cur.fetchone()
             return int(row[0]) if row else 0
 
 
-def query_queue_entry(db_url: str, phone_number: str, agent_id: str) -> tuple | None:
+def query_queue_entry(db_url: str, external_id: str, agent_id: str) -> tuple | None:
     """Busca a entrada mais recente da fila: id, incoming_message, status, response."""
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
@@ -133,11 +136,11 @@ def query_queue_entry(db_url: str, phone_number: str, agent_id: str) -> tuple | 
                 """
                 SELECT id, incoming_message, status, response
                 FROM message_queue
-                WHERE phone_number = %s AND agent_id = %s
+                WHERE external_id = %s AND agent_id = %s
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                (phone_number, agent_id),
+                (external_id, agent_id),
             )
             return cur.fetchone()
 
@@ -225,7 +228,7 @@ def wait_memory_saved(
 
 def wait_conversation_count(
     db_url: str,
-    phone_number: str,
+    external_id: str,
     agent_id: str,
     expected_count: int,
     timeout_seconds: int = 90,
@@ -233,33 +236,33 @@ def wait_conversation_count(
     """Aguarda conversations.message_count atingir o valor esperado."""
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        row = query_conversation(db_url, phone_number, agent_id)
+        row = query_conversation(db_url, external_id, agent_id)
         if row and row[0] >= expected_count:
             return row
         time.sleep(1)
     raise AssertionError(
-        f"Conversa de {phone_number} não atingiu {expected_count} mensagens "
+        f"Conversa de {external_id} não atingiu {expected_count} mensagens "
         f"em {timeout_seconds}s"
     )
 
 
 def wait_queue_done(
     db_url: str,
-    phone_number: str,
+    external_id: str,
     agent_id: str,
     timeout_seconds: int = 90,
 ) -> None:
-    """Aguarda mensagens na fila de um phone+agent saírem de queued/processing."""
+    """Aguarda mensagens na fila de um external_id+agent saírem de queued/processing."""
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        pending = count_queue_entries(db_url, phone_number, agent_id, status="queued")
+        pending = count_queue_entries(db_url, external_id, agent_id, status="queued")
         processing = count_queue_entries(
-            db_url, phone_number, agent_id, status="processing"
+            db_url, external_id, agent_id, status="processing"
         )
         if pending == 0 and processing == 0:
             return
         time.sleep(1)
-    raise AssertionError(f"Fila de {phone_number} não esvaziou em {timeout_seconds}s")
+    raise AssertionError(f"Fila de {external_id} não esvaziou em {timeout_seconds}s")
 
 
 # ---------------------------------------------------------------------------
@@ -267,65 +270,78 @@ def wait_queue_done(
 # ---------------------------------------------------------------------------
 
 
-def get_evolution_webhook_token() -> str:
-    """Token secreto do webhook Evolution (mesmo .env usado pela stack Docker)."""
-    return os.getenv("EVOLUTION_WEBHOOK_TOKEN", "")
+def get_instagram_app_secret() -> str:
+    """App Secret usado na assinatura do webhook (mesmo .env da stack Docker)."""
+    return os.getenv("INSTAGRAM_APP_SECRET", "")
 
 
 def send_webhook(
-    phone: str,
+    external_id: str,
     body: str,
     agent: str = "secretaria",
     message_sid: str | None = None,
-    media_base64: str | None = None,
+    media_url: str | None = None,
     media_type: str | None = None,
     timeout: int = 10,
 ) -> httpx.Response:
-    """Envia POST para /webhook/evolution simulando um evento do Evolution API."""
-    sid = message_sid or unique_sid()
-    remote_jid = f"{phone.lstrip('+')}@s.whatsapp.net"
+    """Envia POST assinado para /webhook/instagram simulando a Meta.
 
-    if media_base64 and media_type:
-        media_key = (
-            "imageMessage" if media_type.startswith("image/") else "audioMessage"
-        )
-        message: dict = {
-            media_key: {"mimetype": media_type, "caption": body},
-            "base64": media_base64,
-        }
-        message_type = media_key
-    else:
-        message = {"conversation": body}
-        message_type = "conversation"
+    Para mídia, `media_url` é a URL do attachment (o worker a baixa — precisa
+    ser https e acessível a partir da stack) e `media_type` o MIME ("image/*",
+    "audio/*", ...).
+    """
+    sid = message_sid or unique_sid()
+
+    message: dict = {"mid": sid}
+    if body:
+        message["text"] = body
+    if media_url and media_type:
+        kind = media_type.split("/")[0]
+        message["attachments"] = [{"type": kind, "payload": {"url": media_url}}]
 
     payload = {
-        "event": "messages.upsert",
-        "instance": "test",
-        "data": {
-            "key": {"remoteJid": remote_jid, "fromMe": False, "id": sid},
-            "message": message,
-            "messageType": message_type,
-        },
+        "object": "instagram",
+        "entry": [
+            {
+                "id": "17841400000000000",
+                "time": int(time.time() * 1000),
+                "messaging": [
+                    {
+                        "sender": {"id": external_id},
+                        "recipient": {"id": "17841400000000000"},
+                        "timestamp": int(time.time() * 1000),
+                        "message": message,
+                    }
+                ],
+            }
+        ],
     }
 
-    token = get_evolution_webhook_token()
+    raw = json.dumps(payload).encode()
+    signature = hmac.new(
+        get_instagram_app_secret().encode(), raw, hashlib.sha256
+    ).hexdigest()
     return httpx.post(
-        f"{API_BASE_URL}/webhook/evolution/{token}?agent={agent}",
-        json=payload,
+        f"{API_BASE_URL}/webhook/instagram?agent={agent}",
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "X-Hub-Signature-256": f"sha256={signature}",
+        },
         timeout=timeout,
     )
 
 
 def send_webhook_and_wait(
     db_url: str,
-    phone: str,
+    external_id: str,
     body: str,
     agent: str = "secretaria",
     timeout_seconds: int = 90,
 ) -> tuple[str, tuple]:
     """Envia webhook e aguarda status terminal. Retorna (sid, row)."""
     sid = unique_sid()
-    response = send_webhook(phone, body, agent=agent, message_sid=sid)
+    response = send_webhook(external_id, body, agent=agent, message_sid=sid)
     assert response.status_code == 200, f"Webhook retornou {response.status_code}"
     row = wait_terminal_status(db_url, sid, timeout_seconds=timeout_seconds)
     return sid, row

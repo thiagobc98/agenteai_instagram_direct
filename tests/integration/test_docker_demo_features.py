@@ -1,19 +1,22 @@
 """Testes demonstrativos E2E com stack Docker.
 
 Estes cenários são focados em demonstração de funcionalidades para aula:
-- webhook com imagem
-- webhook com áudio
+- webhook com imagem (attachment por URL)
+- webhook com áudio (attachment por URL)
 - memória semântica no Postgres Store
 
 Pré-requisito:
     docker compose up -d --build
+
+Os testes de mídia dependem de uma URL https pública (o worker baixa o
+attachment, como faz com a URL real do Instagram): defina
+E2E_MEDIA_IMAGE_URL e E2E_MEDIA_AUDIO_URL, ou eles são pulados.
 """
 
 from __future__ import annotations
 
-import base64
+import os
 import uuid
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import httpx
@@ -37,8 +40,6 @@ from .helpers import (
 )
 
 pytestmark = pytest.mark.docker_demo
-
-ASSETS_DIR = Path(__file__).parents[1] / "assets"
 
 save_memory_fn = save_memory.coroutine
 read_memory_fn = read_memory.coroutine
@@ -77,29 +78,29 @@ def ensure_docker_stack() -> str:
     return db_url
 
 
-def _read_asset_base64(filename: str) -> str:
-    path = ASSETS_DIR / filename
-    if not path.exists():
-        pytest.skip("Assets de demo ausentes em tests/assets/")
-    return base64.b64encode(path.read_bytes()).decode("ascii")
+def _media_url(env_var: str) -> str:
+    url = os.getenv(env_var, "")
+    if not url.startswith("https://"):
+        pytest.skip(f"{env_var} não configurada (URL https pública do arquivo)")
+    return url
 
 
 def test_demo_webhook_image_e2e(ensure_docker_stack: str):
     """Demonstra pipeline completo de imagem via webhook assíncrono."""
     sid = f"MSGIMG{uuid.uuid4().hex[:12]}"
-    phone = f"+5511{uuid.uuid4().int % 10**8:08d}"
+    external_id = f"1784{uuid.uuid4().int % 10**13:013d}"
 
     response = send_webhook(
-        phone,
+        external_id,
         "Descreva esta imagem.",
         message_sid=sid,
-        media_base64=_read_asset_base64("sample.png"),
-        media_type="image/png",
+        media_url=_media_url("E2E_MEDIA_IMAGE_URL"),
+        media_type="image/*",
     )
     assert response.status_code == 200
 
     status, output, error, media_type = wait_terminal_status(ensure_docker_stack, sid)
-    assert media_type == "image/png"
+    assert media_type == "image/*"
     assert status == "done", f"Processamento de imagem falhou: {error}"
     assert output and output.strip()
 
@@ -107,19 +108,19 @@ def test_demo_webhook_image_e2e(ensure_docker_stack: str):
 def test_demo_webhook_audio_e2e(ensure_docker_stack: str):
     """Demonstra pipeline completo de áudio via webhook assíncrono."""
     sid = f"MSGAUD{uuid.uuid4().hex[:12]}"
-    phone = f"+5521{uuid.uuid4().int % 10**8:08d}"
+    external_id = f"1784{uuid.uuid4().int % 10**13:013d}"
 
     response = send_webhook(
-        phone,
+        external_id,
         "Transcreva e responda.",
         message_sid=sid,
-        media_base64=_read_asset_base64("sample.ogg"),
-        media_type="audio/ogg",
+        media_url=_media_url("E2E_MEDIA_AUDIO_URL"),
+        media_type="audio/*",
     )
     assert response.status_code == 200
 
     status, output, error, media_type = wait_terminal_status(ensure_docker_stack, sid)
-    assert media_type == "audio/ogg"
+    assert media_type == "audio/*"
     assert status == "done", f"Processamento de áudio falhou: {error}"
     assert output and output.strip()
 
@@ -129,7 +130,7 @@ async def test_demo_semantic_memory_roundtrip(ensure_docker_stack: str):
     """Demonstra roundtrip de memória por usuário no Postgres Store.
 
     O namespace segue o contrato do projeto: (user_id, "memories"),
-    onde user_id é o telefone (mesmo identificador vindo do payload Evolution).
+    onde user_id é o IGSID do contato (identificador vindo do payload do Instagram).
     """
     api_key = settings.openrouter_api_key
     if not api_key:
@@ -199,13 +200,13 @@ def test_demo_webhook_memory_recall_e2e(ensure_docker_stack: str):
     3) Mensagem B pede recall explícito via read_memory.
     4) Resposta final deve conter o fato salvo.
     """
-    phone = f"+5531{uuid.uuid4().int % 10**8:08d}"
-    thread_id = f"{phone}:secretaria"
+    external_id = f"1784{uuid.uuid4().int % 10**13:013d}"
+    thread_id = f"{external_id}:secretaria"
     token = f"rhawk-{uuid.uuid4().hex[:10]}"
 
     sid_save = f"MSGMEM{uuid.uuid4().hex[:12]}"
     save_response = send_webhook(
-        phone,
+        external_id,
         (
             "Use a ferramenta save_memory e salve este fato sobre mim: "
             f"meu identificador secreto é {token}. "
@@ -219,14 +220,14 @@ def test_demo_webhook_memory_recall_e2e(ensure_docker_stack: str):
     assert status_a == "done", f"Falha ao salvar memória: {error_a}"
     assert output_a and output_a.strip()
 
-    wait_memory_saved(ensure_docker_stack, phone, contains=token)
+    wait_memory_saved(ensure_docker_stack, external_id, contains=token)
 
     # Remove histórico da thread para impedir recuperação via checkpointer.
     clear_thread_checkpoints(ensure_docker_stack, thread_id)
 
     sid_recall = f"MSGMEM{uuid.uuid4().hex[:12]}"
     recall_response = send_webhook(
-        phone,
+        external_id,
         (
             "Sem usar save_memory agora, use read_memory para recuperar "
             "meu identificador secreto e responda apenas com o valor."

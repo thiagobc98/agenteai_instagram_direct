@@ -18,6 +18,8 @@ dependencies = [
     "redis==5.2.1",
     "google-api-python-client>=2.100.0",
     "google-auth>=2.30.0",
+    "pillow>=11",
+    "python-multipart>=0.0.20",
 ]
 
 [build-system]
@@ -50,6 +52,10 @@ quote-style = "double"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompts são texto corrido em string literal: não se quebra linha à força.
+"**/prompts.py" = ["E501"]
 
 [tool.pyright]
 pythonVersion = "3.11"

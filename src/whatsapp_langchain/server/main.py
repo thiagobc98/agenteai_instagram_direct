@@ -20,12 +20,23 @@ from whatsapp_langchain.agents.loader import AgentNotFoundError
 from whatsapp_langchain.server.dependencies import require_admin_session
 from whatsapp_langchain.server.routes.admin import router as admin_router
 from whatsapp_langchain.server.routes.auth import router as auth_router
+from whatsapp_langchain.server.routes.comments import router as comments_router
+from whatsapp_langchain.server.routes.facebook import router as facebook_router
 from whatsapp_langchain.server.routes.health import router as health_router
-from whatsapp_langchain.server.routes.webhook_evolution import (
-    router as webhook_evolution_router,
+from whatsapp_langchain.server.routes.marketing import router as marketing_router
+from whatsapp_langchain.server.routes.media_public import router as media_public_router
+from whatsapp_langchain.server.routes.publishing import router as publishing_router
+from whatsapp_langchain.server.routes.webhook_facebook import (
+    router as webhook_facebook_router,
+)
+from whatsapp_langchain.server.routes.webhook_instagram import (
+    router as webhook_instagram_router,
 )
 from whatsapp_langchain.server.routes.webhook_sync import (
     router as webhook_sync_router,
+)
+from whatsapp_langchain.server.routes.whatsapp_notify import (
+    router as whatsapp_notify_router,
 )
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import (
@@ -69,8 +80,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="WhatsApp LangChain API",
-    description="API para agentes conversacionais WhatsApp com LangGraph.",
+    title="Instagram Direct LangChain API",
+    description="API para agentes conversacionais no Instagram Direct com LangGraph.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -111,7 +122,18 @@ async def agent_not_found_handler(
 
 # Routers
 app.include_router(health_router)
-app.include_router(webhook_evolution_router)
+app.include_router(webhook_instagram_router)
+# Público, protegido pela assinatura HMAC da Meta (FACEBOOK_APP_SECRET)
+app.include_router(webhook_facebook_router)
 app.include_router(webhook_sync_router)
 app.include_router(auth_router)
 app.include_router(admin_router, dependencies=[Depends(require_admin_session)])
+app.include_router(comments_router, dependencies=[Depends(require_admin_session)])
+app.include_router(facebook_router, dependencies=[Depends(require_admin_session)])
+app.include_router(publishing_router, dependencies=[Depends(require_admin_session)])
+app.include_router(marketing_router, dependencies=[Depends(require_admin_session)])
+app.include_router(
+    whatsapp_notify_router, dependencies=[Depends(require_admin_session)]
+)
+# Sem login: a Meta baixa daqui a mídia das publicações (token aleatório)
+app.include_router(media_public_router)

@@ -1,16 +1,21 @@
 # Stress Test (Locust)
 
-Simula carga concorrente em `/webhook/evolution/{token}` para validar o
-pipeline completo sob pressão: rate limit (Redis), debounce/fila
+Simula carga concorrente em `/webhook/instagram` para validar o pipeline
+completo sob pressão: assinatura, rate limit (Redis), debounce/fila
 (PostgreSQL) e worker.
 
 ## Pré-requisitos
 
 1. Stack local rodando: `make up`
-2. `LOCUST_WEBHOOK_TOKEN` (ou `EVOLUTION_WEBHOOK_TOKEN`) definido no
-   ambiente com o mesmo valor configurado no `.env` da stack — sem o
-   token correto, todas as requisições são rejeitadas com 403.
-3. **Nunca rode contra produção.**
+2. `LOCUST_APP_SECRET` (ou `INSTAGRAM_APP_SECRET`) definido no ambiente com
+   o mesmo valor configurado no `.env` da stack — sem a assinatura correta,
+   todas as requisições são rejeitadas com 403.
+3. Rode a stack com um `INSTAGRAM_ACCESS_TOKEN` **falso** (ou
+   `INSTAGRAM_GRAPH_BASE_URL` apontando para um stub local): o Worker tenta
+   responder cada mensagem pela Graph API e você não quer gerar chamadas
+   reais à Meta. Com token falso os envios falham (erro 190) e nada é
+   entregue.
+4. **Nunca rode contra produção.**
 
 ## Rodando
 
@@ -48,8 +53,9 @@ Critérios de saúde:
 
 - `queue_size` não cresce indefinidamente — o worker consegue drenar a
   fila no ritmo da carga gerada.
-- `failures_today` fica baixo. Alguns `429` são **esperados** quando um
-  número de telefone excede `RATE_LIMIT_PER_HOUR` — isso é o rate limit
+- `failures_today`: com token falso, os envios falham por definição (cresce
+  junto com as tentativas) — avalie a fila, não esse número. Alguns `429`
+  são **esperados** quando um contato excede `RATE_LIMIT_PER_HOUR` — isso é o rate limit
   distribuído (Redis) funcionando sob concorrência, não uma falha.
 - `avg_processing_time_seconds` se mantém estável, sem degradar ao
   longo do teste.

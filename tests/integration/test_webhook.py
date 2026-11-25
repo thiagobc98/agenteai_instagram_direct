@@ -4,6 +4,9 @@ Testa o fluxo de webhook sem banco de dados real.
 Usa mocking para simular pool e operações de fila.
 """
 
+import hashlib
+import hmac
+import json
 from unittest.mock import AsyncMock, patch
 
 import fakeredis
@@ -22,7 +25,9 @@ def mock_db(monkeypatch):
     """Mock do banco de dados e do Redis para testes sem infra real."""
     from whatsapp_langchain.shared.config import settings
 
-    monkeypatch.setattr(settings, "evolution_webhook_token", "test-webhook-token")
+    monkeypatch.setattr(settings, "instagram_app_secret", SecretStr(APP_SECRET))
+    monkeypatch.setattr(settings, "instagram_verify_token", SecretStr(VERIFY_TOKEN))
+    monkeypatch.setattr(settings, "instagram_business_account_id", "")
 
     mock_pool = AsyncMock()
     fake_redis = fakeredis.FakeAsyncRedis()
@@ -33,7 +38,7 @@ def mock_db(monkeypatch):
             return_value=True,
         ),
         patch(
-            "whatsapp_langchain.server.routes.webhook_evolution.get_pool",
+            "whatsapp_langchain.server.routes.webhook_instagram.get_pool",
             return_value=mock_pool,
         ),
         patch(
@@ -51,23 +56,45 @@ def mock_db(monkeypatch):
         yield mock_pool
 
 
-WEBHOOK_TOKEN = "test-webhook-token"
+APP_SECRET = "test-app-secret"
+VERIFY_TOKEN = "test-verify-token"
+SENDER = "17841400000000001"
+BUSINESS = "17841400000000000"
+ROUTE = "whatsapp_langchain.server.routes.webhook_instagram"
 
 
-def _message_payload(text: str = "Olá", phone: str = "5511999999999") -> dict:
+def _message_payload(text: str = "Olá", sender: str = SENDER) -> dict:
     return {
-        "event": "messages.upsert",
-        "instance": "test",
-        "data": {
-            "key": {
-                "remoteJid": f"{phone}@s.whatsapp.net",
-                "fromMe": False,
-                "id": "MSG123",
-            },
-            "message": {"conversation": text},
-            "messageType": "conversation",
-        },
+        "object": "instagram",
+        "entry": [
+            {
+                "id": BUSINESS,
+                "time": 1700000000000,
+                "messaging": [
+                    {
+                        "sender": {"id": sender},
+                        "recipient": {"id": BUSINESS},
+                        "timestamp": 1700000000000,
+                        "message": {"mid": "MID123", "text": text},
+                    }
+                ],
+            }
+        ],
     }
+
+
+def _post(payload: dict, path: str = "/webhook/instagram?agent=secretaria"):
+    """POST assinado como a Meta faz (HMAC-SHA256 do body com o App Secret)."""
+    raw = json.dumps(payload).encode()
+    signature = hmac.new(APP_SECRET.encode(), raw, hashlib.sha256).hexdigest()
+    return client.post(
+        path,
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "X-Hub-Signature-256": f"sha256={signature}",
+        },
+    )
 
 
 @pytest.fixture
@@ -108,7 +135,7 @@ class TestWebhookSync:
         """Deve exigir o query param 'agent'."""
         response = client.post(
             "/webhook/sync",
-            json={"phone": "+5511999999999", "message": "Olá"},
+            json={"external_id": SENDER, "message": "Olá"},
         )
         # Sem agent= -> 422 (query param obrigatório)
         assert response.status_code == 422
@@ -117,90 +144,91 @@ class TestWebhookSync:
         """Deve retornar erro para agente inexistente."""
         response = client.post(
             "/webhook/sync?agent=nao_existe",
-            json={"phone": "+5511999999999", "message": "Olá"},
+            json={"external_id": SENDER, "message": "Olá"},
         )
         assert response.status_code == 400
 
 
-class TestWebhookEvolution:
-    """Testes do webhook Evolution API."""
+class TestWebhookInstagram:
+    """Testes do webhook do Instagram."""
+
+    def test_verification_handshake(self):
+        """GET de verificação devolve o hub.challenge em texto puro."""
+        response = client.get(
+            "/webhook/instagram",
+            params={
+                "hub.mode": "subscribe",
+                "hub.verify_token": VERIFY_TOKEN,
+                "hub.challenge": "987654",
+            },
+        )
+        assert response.status_code == 200
+        assert response.text == "987654"
+
+    def test_verification_rejects_wrong_token(self):
+        response = client.get(
+            "/webhook/instagram",
+            params={
+                "hub.mode": "subscribe",
+                "hub.verify_token": "errado",
+                "hub.challenge": "987654",
+            },
+        )
+        assert response.status_code == 403
 
     def test_requires_agent(self):
         """Deve exigir o query param 'agent'."""
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}",
-            json=_message_payload(),
-        )
+        response = _post(_message_payload(), path="/webhook/instagram")
         # Sem agent= -> 422
         assert response.status_code == 422
 
     def test_nonexistent_agent(self):
         """Deve retornar erro para agente inexistente."""
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}?agent=nao_existe",
-            json=_message_payload(),
-        )
+        response = _post(_message_payload(), path="/webhook/instagram?agent=nao_existe")
         assert response.status_code == 400
 
-    def test_rejects_wrong_token(self):
-        """Deve rejeitar com 403 quando o token do path não confere."""
+    def test_rejects_invalid_signature(self):
+        """Deve rejeitar com 403 quando a assinatura não confere."""
         response = client.post(
-            "/webhook/evolution/token-errado?agent=secretaria",
+            "/webhook/instagram?agent=secretaria",
             json=_message_payload(),
+            headers={"X-Hub-Signature-256": "sha256=" + "0" * 64},
         )
         assert response.status_code == 403
 
-    @patch("whatsapp_langchain.server.routes.webhook_evolution.enqueue_or_buffer")
+    @patch(f"{ROUTE}.enqueue_or_buffer")
     def test_enqueues_message(self, mock_enqueue):
         """Deve enfileirar mensagem e confirmar recebimento."""
         from whatsapp_langchain.shared.models import EnqueueResult
 
         mock_enqueue.return_value = EnqueueResult(message_id=1, is_buffered=False)
 
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}?agent=secretaria",
-            json=_message_payload(),
-        )
+        response = _post(_message_payload())
         assert response.status_code == 200
-        assert response.json() == {"received": True}
+        assert response.json() == {"received": True, "enqueued": 1}
         mock_enqueue.assert_awaited_once()
-        assert mock_enqueue.call_args.kwargs["phone_number"] == "+5511999999999"
+        assert mock_enqueue.call_args.kwargs["external_id"] == SENDER
 
-    @patch("whatsapp_langchain.server.routes.webhook_evolution.enqueue_or_buffer")
-    def test_ignores_group_messages(self, mock_enqueue):
-        """Mensagens de grupo (@g.us) devem ser ignoradas sem enfileirar."""
-        payload = _message_payload()
-        payload["data"]["key"]["remoteJid"] = "120363000000000000@g.us"
-
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}?agent=secretaria",
-            json=payload,
-        )
-        assert response.status_code == 200
-        assert response.json() == {"ignored": True}
-        mock_enqueue.assert_not_awaited()
-
-    @patch("whatsapp_langchain.server.routes.webhook_evolution.enqueue_or_buffer")
+    @patch(f"{ROUTE}.enqueue_or_buffer")
     def test_ignores_own_echoed_messages(self, mock_enqueue):
-        """Mensagens com fromMe=true (eco do próprio bot) são ignoradas."""
+        """Mensagens com is_echo=true (eco da própria conta) são ignoradas."""
         payload = _message_payload()
-        payload["data"]["key"]["fromMe"] = True
+        payload["entry"][0]["messaging"][0]["message"]["is_echo"] = True
 
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}?agent=secretaria",
-            json=payload,
-        )
+        response = _post(payload)
         assert response.status_code == 200
         assert response.json() == {"ignored": True}
         mock_enqueue.assert_not_awaited()
 
-    @patch("whatsapp_langchain.server.routes.webhook_evolution.enqueue_or_buffer")
+    @patch(f"{ROUTE}.enqueue_or_buffer")
     def test_ignores_non_message_events(self, mock_enqueue):
-        """Eventos que não são messages.upsert são ignorados."""
-        response = client.post(
-            f"/webhook/evolution/{WEBHOOK_TOKEN}?agent=secretaria",
-            json={"event": "connection.update", "data": {}},
-        )
+        """Eventos que não são mensagem (ex: leitura) são ignorados."""
+        payload = _message_payload()
+        event = payload["entry"][0]["messaging"][0]
+        del event["message"]
+        event["read"] = {"mid": "MID123"}
+
+        response = _post(payload)
         assert response.status_code == 200
         assert response.json() == {"ignored": True}
         mock_enqueue.assert_not_awaited()

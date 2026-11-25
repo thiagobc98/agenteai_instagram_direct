@@ -75,12 +75,12 @@ class TestMediaReal:
         """Fluxo completo de imagem: mocka só o download, IA é real."""
         with patch(
             "whatsapp_langchain.worker.media.download_media",
-            new=AsyncMock(return_value=image_bytes),
+            new=AsyncMock(return_value=(image_bytes, "image/png")),
         ):
             result = await preprocess_incoming_message(
                 body="Descreva",
-                media_url="http://fake/image.png",
-                media_type="image/png",
+                media_url="https://fake.example/image.png",
+                media_type="image/*",
             )
 
         print(f"\n--- Texto normalizado (imagem) ---\n{result.normalized_text}\n---")
@@ -93,12 +93,12 @@ class TestMediaReal:
         """Fluxo completo de áudio: mocka só o download, IA é real."""
         with patch(
             "whatsapp_langchain.worker.media.download_media",
-            new=AsyncMock(return_value=audio_bytes),
+            new=AsyncMock(return_value=(audio_bytes, "audio/ogg")),
         ):
             result = await preprocess_incoming_message(
                 body="Transcreva",
-                media_url="http://fake/audio.ogg",
-                media_type="audio/ogg",
+                media_url="https://fake.example/audio.ogg",
+                media_type="audio/*",
             )
 
         print(f"\n--- Texto normalizado (áudio) ---\n{result.normalized_text}\n---")

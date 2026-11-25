@@ -6,7 +6,7 @@ marcar, remarcar, cancelar e consultar disponibilidade de consultas.
 ## Visão geral
 
 ```
-Paciente (WhatsApp)
+Paciente (Instagram Direct)
        │
        ▼
 Agente (LangGraph) ──► tools/calendar.py ──► shared/google_calendar.py
@@ -30,7 +30,7 @@ Google Workspace.
    → busque "Google Calendar API" → **Ativar**.
 3. Crie a Service Account: "APIs e serviços" → "Credenciais" → **Criar
    credenciais** → **Conta de serviço**.
-   - Nome: ex. `whatsapp-bot-agenda`
+   - Nome: ex. `instagram-bot-agenda`
    - Não precisa conceder papéis (roles) do projeto — o acesso é dado
      diretamente na agenda, no passo 3.
 4. Na lista de contas de serviço, abra a que você criou → aba **Chaves**
@@ -38,13 +38,13 @@ Google Workspace.
 5. O arquivo `.json` é baixado automaticamente. **Guarde-o com cuidado** —
    ele não pode ser gerado de novo (só recriado).
 6. Copie o campo `"client_email"` de dentro do JSON — algo como
-   `whatsapp-bot-agenda@seu-projeto.iam.gserviceaccount.com`. Você vai
+   `instagram-bot-agenda@seu-projeto.iam.gserviceaccount.com`. Você vai
    precisar dele no próximo passo.
 
 ## 2. Compartilhar a agenda com a Service Account
 
 1. Abra o [Google Agenda](https://calendar.google.com/) com a conta cuja
-   agenda o bot vai gerenciar (ex: a conta da Dra. Luana Lima).
+   agenda o bot vai gerenciar (ex: a conta da loja).
 2. Nas configurações da agenda desejada (ícone de engrenagem → "Configurações
    e compartilhamento com pessoas específicas") → **Adicionar pessoas e
    grupos**.
@@ -102,7 +102,7 @@ docker compose up -d --build worker
 
 ## 4. Testar
 
-Envie mensagens para o número do bot simulando um paciente:
+Envie mensagens no Direct da conta profissional simulando um paciente:
 
 ```
 Quero marcar uma consulta
@@ -133,20 +133,27 @@ As ferramentas ficam em
 | `cancel_appointment()` | Cancela a próxima consulta futura do paciente. |
 | `list_my_appointments()` | Lista as consultas futuras do paciente. |
 
-O paciente é identificado pelo **número de WhatsApp** (`user_id` injetado
-pelo worker — o mesmo usado pela memória semântica), não pelo nome. Cada
-evento criado guarda o telefone em
-`extendedProperties.private.phone`, o que permite localizar a consulta do
+O paciente é identificado pelo **ID da conta no Instagram** (IGSID, o `user_id`
+injetado pelo worker — o mesmo usado pela memória semântica), não pelo nome.
+Cada evento criado guarda esse ID em
+`extendedProperties.private.external_id`, o que permite localizar a consulta do
 paciente depois (para remarcar/cancelar) sem precisar de um banco de dados
 próprio de agendamentos — a fonte da verdade é o Google Calendar.
 
 `reschedule_appointment` e `cancel_appointment` sempre agem sobre a
 **consulta futura mais próxima** do paciente. Se um paciente puder ter
 múltiplas consultas futuras simultaneamente, isso é uma simplificação
-consciente desta implementação — ajuste `find_events_by_phone` em
+consciente desta implementação — ajuste `find_events_by_external_id` em
 `shared/google_calendar.py` se precisar listar/escolher entre várias.
 
 ## 6. Limitações conhecidas
+
+- **Sem lembretes automáticos**: o projeto não envia lembrete de consulta nem
+  resumo da agenda (mensagens proativas ficam sujeitas à janela de 24h do
+  Instagram; veja [INSTAGRAM_API.md](INSTAGRAM_API.md)).
+- **Eventos antigos (WhatsApp)**: eventos criados antes da migração guardam o
+  telefone em `extendedProperties.private.phone`; eles aparecem no painel, mas
+  as tools do agente só reconhecem `external_id`.
 
 - **Sem lock de concorrência**: se dois pacientes tentarem marcar o mesmo
   horário ao mesmo tempo, ambos podem passar a checagem de disponibilidade

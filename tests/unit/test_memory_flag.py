@@ -55,6 +55,16 @@ class TestProcessorMemoryFlag:
                 "whatsapp_langchain.worker.processor.upsert_conversation",
                 new_callable=AsyncMock,
             ),
+            patch(
+                "whatsapp_langchain.worker.processor.get_contact_username",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "whatsapp_langchain.worker.processor.get_customer_whatsapp",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             mock_graph = AsyncMock()
             mock_graph.ainvoke.return_value = {
@@ -68,22 +78,22 @@ class TestProcessorMemoryFlag:
 
             message = MessageQueue(
                 id=1,
-                phone_number="+5511999999999",
+                external_id="17841400000000001",
                 agent_id="secretaria",
-                thread_id="+5511999999999:secretaria",
+                thread_id="17841400000000001:secretaria",
                 incoming_message="Olá!",
             )
 
-            mock_evolution = AsyncMock()
-            mock_evolution.send_typing = AsyncMock(return_value=True)
-            mock_evolution.send_message = AsyncMock(return_value="MSG123")
+            mock_instagram = AsyncMock()
+            mock_instagram.send_typing = AsyncMock(return_value=True)
+            mock_instagram.send_message = AsyncMock(return_value="MSG123")
 
             await process_message(
                 message,
                 AsyncMock(),
                 checkpointer=mock_checkpointer,
                 store=None,
-                evolution=mock_evolution,
+                instagram=mock_instagram,
             )
 
             mock_preprocess.assert_awaited_once()

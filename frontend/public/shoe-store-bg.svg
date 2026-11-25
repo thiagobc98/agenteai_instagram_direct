@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8f0ea"/>
+      <stop offset="100%" stop-color="#eddcd0"/>
+    </linearGradient>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d2ae8e"/>
+      <stop offset="100%" stop-color="#b78f6c"/>
+    </linearGradient>
+    <linearGradient id="mirror" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f4f8fa"/>
+      <stop offset="55%" stop-color="#d7e4ea"/>
+      <stop offset="100%" stop-color="#eef4f7"/>
+    </linearGradient>
+
+    <!-- Scarpin de salto alto (100x70, pé à direita). A cor vem do <use>. -->
+    <symbol id="pump" viewBox="0 0 100 70">
+      <path d="M8 8 L40 18 C58 32 78 54 95 59 C99 61 98 67 92 67 L66 66 C50 60 36 46 26 32 L8 30 C5 22 5 14 8 8 Z"/>
+      <path d="M8 30 L26 32 L17 68 L12 68 Z"/>
+      <path d="M40 18 C58 32 78 54 95 59" fill="none" stroke="#fff" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
+    </symbol>
+
+    <!-- Sapatilha (100x70) -->
+    <symbol id="flat" viewBox="0 0 100 70">
+      <path d="M6 44 C6 32 14 28 24 30 L44 37 C62 42 80 48 94 58 C98 61 96 67 90 67 L12 67 C7 67 5 60 6 44 Z"/>
+      <path d="M44 37 C62 42 80 48 94 58" fill="none" stroke="#fff" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
+      <path d="M8 64 L92 64" fill="none" stroke="#000" stroke-opacity="0.18" stroke-width="3"/>
+    </symbol>
+
+    <!-- Bota de cano curto com salto bloco (100x70) -->
+    <symbol id="boot" viewBox="0 0 100 70">
+      <path d="M12 2 L36 2 L38 36 C52 42 84 46 96 58 C99 62 96 68 90 68 L16 68 C10 68 9 62 9 56 Z"/>
+      <path d="M12 2 L36 2" fill="none" stroke="#000" stroke-opacity="0.2" stroke-width="4" stroke-linecap="round"/>
+      <path d="M38 36 C52 42 84 46 96 58" fill="none" stroke="#fff" stroke-opacity="0.3" stroke-width="3" stroke-linecap="round"/>
+      <path d="M9 62 L92 62" fill="none" stroke="#000" stroke-opacity="0.2" stroke-width="3"/>
+    </symbol>
+
+    <!-- Estante de parede: 3 prateleiras (380x470) -->
+    <symbol id="shelf" viewBox="0 0 380 470">
+      <rect x="0" y="0" width="380" height="470" rx="10" fill="#e8d5c6"/>
+      <rect x="6" y="6" width="368" height="458" rx="6" fill="#f3e7dd"/>
+      <rect x="0" y="146" width="380" height="14" rx="3" fill="#b98f6c"/>
+      <rect x="0" y="296" width="380" height="14" rx="3" fill="#b98f6c"/>
+      <rect x="0" y="446" width="380" height="14" rx="3" fill="#b98f6c"/>
+      <rect x="0" y="160" width="380" height="8" fill="#000" opacity="0.06"/>
+      <rect x="0" y="310" width="380" height="8" fill="#000" opacity="0.06"/>
+    </symbol>
+  </defs>
+
+  <!-- parede e piso -->
+  <rect x="0" y="0" width="1600" height="760" fill="url(#wall)"/>
+  <rect x="0" y="760" width="1600" height="240" fill="url(#floor)"/>
+  <rect x="0" y="752" width="1600" height="12" fill="#a07a58"/>
+  <g stroke="#9c7654" stroke-opacity="0.35" stroke-width="2">
+    <line x1="0" y1="830" x2="1600" y2="830"/>
+    <line x1="0" y1="905" x2="1600" y2="905"/>
+    <line x1="300" y1="764" x2="240" y2="830"/><line x1="900" y1="764" x2="880" y2="830"/><line x1="1400" y1="764" x2="1440" y2="830"/>
+    <line x1="120" y1="830" x2="60" y2="905"/><line x1="620" y1="830" x2="590" y2="905"/><line x1="1150" y1="830" x2="1170" y2="905"/>
+    <line x1="420" y1="905" x2="380" y2="1000"/><line x1="1000" y1="905" x2="1010" y2="1000"/><line x1="1500" y1="905" x2="1540" y2="1000"/>
+  </g>
+
+  <!-- letreiro -->
+  <g>
+    <rect x="545" y="118" width="510" height="72" rx="10" fill="#3a2a2a"/>
+    <rect x="551" y="124" width="498" height="60" rx="7" fill="none" stroke="#c9a46c" stroke-width="2"/>
+    <text x="800" y="166" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="26" letter-spacing="6" fill="#f3e3c8">CALÇADOS FEMININOS</text>
+  </g>
+
+  <!-- estante esquerda -->
+  <use href="#shelf" x="70" y="290" width="380" height="470"/>
+  <!-- linha 1 -->
+  <use href="#pump" x="88" y="366" width="100" height="70" fill="#c2415d"/>
+  <use href="#flat" x="208" y="366" width="100" height="70" fill="#1f1f24"/>
+  <use href="#boot" x="328" y="366" width="100" height="70" fill="#8a5a3c"/>
+  <!-- linha 2 -->
+  <use href="#flat" x="88" y="516" width="100" height="70" fill="#e8b7b0"/>
+  <use href="#pump" x="208" y="516" width="100" height="70" fill="#f1e6d6"/>
+  <use href="#pump" x="328" y="516" width="100" height="70" fill="#2f5d8a"/>
+  <!-- linha 3 -->
+  <use href="#boot" x="88" y="666" width="100" height="70" fill="#1f1f24"/>
+  <use href="#pump" x="208" y="666" width="100" height="70" fill="#d9822b"/>
+  <use href="#flat" x="328" y="666" width="100" height="70" fill="#a3324a"/>
+
+  <!-- estante direita -->
+  <use href="#shelf" x="1150" y="290" width="380" height="470"/>
+  <use href="#pump" x="1168" y="366" width="100" height="70" fill="#1f1f24"/>
+  <use href="#boot" x="1288" y="366" width="100" height="70" fill="#b85c6e"/>
+  <use href="#flat" x="1408" y="366" width="100" height="70" fill="#f1e6d6"/>
+  <use href="#flat" x="1168" y="516" width="100" height="70" fill="#7a9b6b"/>
+  <use href="#pump" x="1288" y="516" width="100" height="70" fill="#c2415d"/>
+  <use href="#pump" x="1408" y="516" width="100" height="70" fill="#8a5a3c"/>
+  <use href="#pump" x="1168" y="666" width="100" height="70" fill="#e8b7b0"/>
+  <use href="#flat" x="1288" y="666" width="100" height="70" fill="#2f5d8a"/>
+  <use href="#boot" x="1408" y="666" width="100" height="70" fill="#d9822b"/>
+
+  <!-- espelho de chão -->
+  <g>
+    <path d="M492 752 L492 420 C492 350 588 350 588 420 L588 752 Z" fill="#c9a46c"/>
+    <path d="M502 746 L502 424 C502 366 578 366 578 424 L578 746 Z" fill="url(#mirror)"/>
+    <path d="M512 700 L512 430 C512 400 526 386 540 380" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- tapete -->
+  <ellipse cx="800" cy="905" rx="430" ry="62" fill="#e6d3c4" opacity="0.85"/>
+  <ellipse cx="800" cy="905" rx="360" ry="46" fill="none" stroke="#c9a46c" stroke-opacity="0.7" stroke-width="3"/>
+
+  <!-- pufe com sapato em exposição -->
+  <g>
+    <ellipse cx="700" cy="842" rx="90" ry="12" fill="#000" opacity="0.1"/>
+    <rect x="628" y="770" width="144" height="72" rx="30" fill="#d59a94"/>
+    <rect x="628" y="770" width="144" height="26" rx="13" fill="#e2b1ab"/>
+    <use href="#pump" x="650" y="704" width="100" height="70" fill="#c2415d"/>
+  </g>
+
+  <!-- caixas de sapato empilhadas -->
+  <g>
+    <ellipse cx="960" cy="842" rx="80" ry="10" fill="#000" opacity="0.1"/>
+    <rect x="905" y="790" width="110" height="50" rx="4" fill="#2b2626"/>
+    <rect x="899" y="782" width="122" height="14" rx="3" fill="#3a3232"/>
+    <rect x="905" y="812" width="110" height="6" fill="#e2a7a1"/>
+    <rect x="915" y="742" width="90" height="40" rx="4" fill="#f1e6d6"/>
+    <rect x="910" y="734" width="100" height="12" rx="3" fill="#e8d7c1"/>
+    <rect x="915" y="762" width="90" height="5" fill="#c2415d"/>
+  </g>
+
+  <!-- vaso com planta -->
+  <g transform="translate(1092,752)">
+    <ellipse cx="0" cy="14" rx="44" ry="9" fill="#000" opacity="0.1"/>
+    <path d="M-30 0 L30 0 L22 66 L-22 66 Z" fill="#c98a5e"/>
+    <path d="M-32 0 L32 0 L30 12 L-30 12 Z" fill="#dba57c"/>
+    <g fill="#5b8a5f" transform="translate(0,2)">
+      <path d="M0 0 C -46 -30 -56 -100 -18 -140 C -4 -96 -4 -44 0 0 Z"/>
+      <path d="M0 0 C 46 -34 62 -104 22 -146 C 8 -100 4 -44 0 0 Z"/>
+      <path d="M0 0 C -12 -60 8 -120 0 -160 C 20 -110 20 -56 0 0 Z" fill="#6ea172"/>
+    </g>
+  </g>
+</svg>

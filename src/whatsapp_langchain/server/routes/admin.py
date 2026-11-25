@@ -6,7 +6,7 @@ Usado pelo frontend (Next.js Admin Panel).
 Uso:
     curl http://localhost:8000/api/agents
     curl http://localhost:8000/api/chats?limit=20
-    curl http://localhost:8000/api/chats/+5511999999999
+    curl http://localhost:8000/api/chats/17841400000000000
     curl http://localhost:8000/api/metrics
 """
 
@@ -16,6 +16,8 @@ import structlog
 from fastapi import APIRouter, Query
 
 from whatsapp_langchain.agents.loader import list_agents
+from whatsapp_langchain.shared.analytics import build_dashboard
+from whatsapp_langchain.shared.comments import list_private_replies
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
 from whatsapp_langchain.shared.google_calendar import (
@@ -57,10 +59,12 @@ async def get_chats(
     async with pool.connection() as conn:
         cursor = await conn.execute(
             """
-            SELECT phone_number, agent_id, thread_id, last_message,
-                   last_message_at, message_count, created_at
-            FROM conversations
-            ORDER BY last_message_at DESC
+            SELECT v.external_id, v.agent_id, v.thread_id, v.last_message,
+                   v.last_message_at, v.message_count, v.created_at,
+                   c.username, c.name, c.profile_pic_url, c.whatsapp
+            FROM conversations v
+            LEFT JOIN contacts c ON c.external_id = v.external_id
+            ORDER BY v.last_message_at DESC
             LIMIT %s OFFSET %s
             """,
             (limit, offset),
@@ -74,13 +78,17 @@ async def get_chats(
 
     chats = [
         {
-            "phone_number": row[0],
+            "external_id": row[0],
             "agent_id": row[1],
             "thread_id": row[2],
             "last_message": row[3],
             "last_message_at": row[4].isoformat() if row[4] else None,
             "message_count": row[5],
             "created_at": row[6].isoformat() if row[6] else None,
+            "username": row[7],
+            "name": row[8],
+            "profile_pic_url": row[9],
+            "whatsapp": row[10],
         }
         for row in rows
     ]
@@ -88,16 +96,16 @@ async def get_chats(
     return {"chats": chats, "total": total, "limit": limit, "offset": offset}
 
 
-@router.get("/chats/{phone_number:path}")
+@router.get("/chats/{external_id:path}")
 async def get_chat_messages(
-    phone_number: str,
+    external_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict:
     """Lista mensagens de uma conversa específica.
 
     Args:
-        phone_number: Número de telefone do remetente.
+        external_id: ID do contato no Instagram (IGSID).
         limit: Máximo de resultados (1-200). Default: 50.
         offset: Offset para paginação. Default: 0.
 
@@ -114,13 +122,30 @@ async def get_chat_messages(
                    response, status, created_at, processed_at,
                    media_processing_error, error
             FROM message_queue
-            WHERE phone_number = %s
+            WHERE external_id = %s
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
             """,
-            (phone_number, limit, offset),
+            (external_id, limit, offset),
         )
         rows = await cursor.fetchall()
+
+        cursor = await conn.execute(
+            """
+            SELECT username, name, profile_pic_url, whatsapp
+            FROM contacts WHERE external_id = %s
+            """,
+            (external_id,),
+        )
+        contact = await cursor.fetchone()
+
+    # Mensagens privadas enviadas pela tela de comentários (fora da fila do
+    # Direct): entram na linha do tempo da conversa. Best-effort.
+    try:
+        comment_replies = await list_private_replies(pool, external_id)
+    except Exception as exc:
+        logger.warning("chat_comment_replies_failed", error=str(exc))
+        comment_replies = []
 
     messages = [
         {
@@ -140,7 +165,37 @@ async def get_chat_messages(
         for row in rows
     ]
 
-    return {"phone_number": phone_number, "messages": messages}
+    return {
+        "external_id": external_id,
+        "username": contact[0] if contact else None,
+        "name": contact[1] if contact else None,
+        "profile_pic_url": contact[2] if contact else None,
+        "whatsapp": contact[3] if contact else None,
+        "messages": messages,
+        "comment_replies": comment_replies,
+    }
+
+
+@router.get("/dashboard")
+async def get_dashboard(
+    days: int = Query(default=14, ge=7, le=90),
+) -> dict:
+    """Indicadores de negócio da loja para o dashboard.
+
+    Leads novos, clientes encaminhados à Patrícia, séries por dia, horários de
+    pico, assuntos mais perguntados e mix de mensagens (ver
+    `shared/analytics.py` para as definições).
+
+    Args:
+        days: Janela do período em dias (7-90). Default: 14.
+    """
+    pool = await get_pool()
+    return await build_dashboard(
+        pool,
+        days=days,
+        timezone=settings.business_timezone,
+        handoff_phone=settings.handoff_phone,
+    )
 
 
 @router.get("/metrics")
@@ -236,7 +291,8 @@ async def get_calendar_events(
                 "start": start_info.get("dateTime") or start_info.get("date"),
                 "end": end_info.get("dateTime") or end_info.get("date"),
                 "all_day": "date" in start_info,
-                "phone": private.get("phone"),
+                # Eventos antigos (WhatsApp) guardavam o telefone em "phone".
+                "external_id": private.get("external_id") or private.get("phone"),
                 "patient_name": private.get("patient_name"),
             }
         )

@@ -11,7 +11,7 @@ entrada na fila.
 Uso:
     from whatsapp_langchain.shared.queue import enqueue_or_buffer
 
-    result = await enqueue_or_buffer(pool, phone="+55...", body="Olá")
+    result = await enqueue_or_buffer(pool, external_id="1784...", body="Olá")
     message = await claim_next(pool, lease_seconds=60)
 """
 
@@ -28,13 +28,13 @@ logger = structlog.get_logger()
 
 async def enqueue_or_buffer(
     pool: AsyncConnectionPool,
-    phone_number: str,
+    external_id: str,
     agent_id: str,
     body: str,
     media_url: str | None = None,
     media_base64: str | None = None,
     media_type: str | None = None,
-    to_number: str | None = None,
+    to_id: str | None = None,
     message_id: str | None = None,
     buffer_seconds: float = 2.0,
 ) -> EnqueueResult:
@@ -43,33 +43,33 @@ async def enqueue_or_buffer(
     Regras de debounce (Fase 3):
     - Debounce somente para texto (sem mídia).
     - Mensagem com mídia não faz debounce (entrada imediata).
-    - Antes de inserir mídia, flush de texto pendente do mesmo phone+agent
+    - Antes de inserir mídia, flush de texto pendente do mesmo external_id+agent
       para que o worker processe o texto ANTES da mídia (ordenação por created_at).
-    - Concorrência protegida por pg_advisory_xact_lock(hash(phone+agent)).
+    - Concorrência protegida por pg_advisory_xact_lock(hash(external_id+agent)).
 
     Limitação conhecida: múltiplas mídias no mesmo webhook ficam fora do escopo.
 
     Args:
         pool: Pool de conexões do psycopg.
-        phone_number: Telefone do remetente (E.164).
+        external_id: Identificador do remetente (IGSID do Instagram).
         agent_id: ID do agente que vai processar.
         body: Texto da mensagem.
-        media_url: URL de mídia anexada (opcional, provedores baseados em URL).
-        media_base64: Conteúdo de mídia em base64 (opcional, Evolution API).
+        media_url: URL da mídia anexada (opcional, Instagram — baixada no worker).
+        media_base64: Conteúdo de mídia em base64 (opcional, sem uso no Instagram).
         media_type: MIME type da mídia (opcional).
-        to_number: Número destinatário (opcional).
+        to_id: ID da conta destinatária (opcional).
         message_id: ID externo da mensagem (opcional).
         buffer_seconds: Segundos de debounce. Default: 2.0.
 
     Returns:
         EnqueueResult com message_id e se foi buffered.
     """
-    thread_id = f"{phone_number}:{agent_id}"
+    thread_id = f"{external_id}:{agent_id}"
     has_media = media_url is not None or media_base64 is not None
 
     # Hash determinístico para pg_advisory_xact_lock.
     # Usa os 8 bytes iniciais do SHA-256 convertidos para int64 signed,
-    # garantindo chave única por phone+agent sem risco de colisão prática.
+    # garantindo chave única por external_id+agent sem risco de colisão prática.
     lock_key = int.from_bytes(
         hashlib.sha256(thread_id.encode()).digest()[:8],
         byteorder="big",
@@ -77,7 +77,7 @@ async def enqueue_or_buffer(
     )
 
     async with pool.connection() as conn:
-        # Lock transacional: serializa debounce para o mesmo phone+agent.
+        # Lock transacional: serializa debounce para o mesmo external_id+agent.
         # Liberado automaticamente no commit/rollback da transação.
         await conn.execute("SELECT pg_advisory_xact_lock(%s)", (lock_key,))
 
@@ -90,19 +90,19 @@ async def enqueue_or_buffer(
                 UPDATE message_queue
                 SET process_after = NOW(),
                     updated_at = NOW()
-                WHERE phone_number = %s
+                WHERE external_id = %s
                   AND agent_id = %s
                   AND status = 'queued'
                   AND process_after > NOW()
                   AND media_url IS NULL
                   AND media_base64 IS NULL
                 """,
-                (phone_number, agent_id),
+                (external_id, agent_id),
             )
             if flushed.rowcount and flushed.rowcount > 0:
                 logger.info(
                     "text_flushed_for_media",
-                    phone=phone_number,
+                    external_id=external_id,
                     agent_id=agent_id,
                     flushed_count=flushed.rowcount,
                 )
@@ -111,7 +111,7 @@ async def enqueue_or_buffer(
             cursor = await conn.execute(
                 """
                 INSERT INTO message_queue
-                    (message_id, phone_number, to_number, agent_id,
+                    (message_id, external_id, to_id, agent_id,
                      thread_id, incoming_message, media_url, media_base64,
                      media_type, process_after)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
@@ -119,8 +119,8 @@ async def enqueue_or_buffer(
                 """,
                 (
                     message_id,
-                    phone_number,
-                    to_number,
+                    external_id,
+                    to_id,
                     agent_id,
                     thread_id,
                     body,
@@ -137,7 +137,7 @@ async def enqueue_or_buffer(
             logger.info(
                 "media_message_enqueued",
                 message_id=new_id,
-                phone=phone_number,
+                external_id=external_id,
                 agent_id=agent_id,
             )
             return EnqueueResult(message_id=new_id, is_buffered=False)
@@ -151,7 +151,7 @@ async def enqueue_or_buffer(
             """
             SELECT id, incoming_message
             FROM message_queue
-            WHERE phone_number = %s
+            WHERE external_id = %s
               AND agent_id = %s
               AND status = 'queued'
               AND process_after > NOW()
@@ -160,7 +160,7 @@ async def enqueue_or_buffer(
             ORDER BY created_at DESC
             LIMIT 1
             """,
-            (phone_number, agent_id),
+            (external_id, agent_id),
         )
         existing = await cursor.fetchone()
 
@@ -184,7 +184,7 @@ async def enqueue_or_buffer(
             logger.info(
                 "message_buffered",
                 message_id=existing_id,
-                phone=phone_number,
+                external_id=external_id,
                 agent_id=agent_id,
             )
             return EnqueueResult(message_id=existing_id, is_buffered=True)
@@ -193,7 +193,7 @@ async def enqueue_or_buffer(
         cursor = await conn.execute(
             """
             INSERT INTO message_queue
-                (message_id, phone_number, to_number, agent_id, thread_id,
+                (message_id, external_id, to_id, agent_id, thread_id,
                  incoming_message, media_url, media_base64, media_type,
                  process_after)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -201,8 +201,8 @@ async def enqueue_or_buffer(
             """,
             (
                 message_id,
-                phone_number,
-                to_number,
+                external_id,
+                to_id,
                 agent_id,
                 thread_id,
                 body,
@@ -220,7 +220,7 @@ async def enqueue_or_buffer(
         logger.info(
             "message_enqueued",
             message_id=new_id,
-            phone=phone_number,
+            external_id=external_id,
             agent_id=agent_id,
         )
         return EnqueueResult(message_id=new_id, is_buffered=False)
@@ -289,7 +289,7 @@ async def claim_next(
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING id, message_id, phone_number, to_number, agent_id, thread_id,
+            RETURNING id, message_id, external_id, to_id, agent_id, thread_id,
                       incoming_message, media_url, media_base64, media_type,
                       normalized_input, media_processing_status, media_processing_error,
                       status,
@@ -307,8 +307,8 @@ async def claim_next(
         message = MessageQueue(
             id=row[0],
             message_id=row[1],
-            phone_number=row[2],
-            to_number=row[3],
+            external_id=row[2],
+            to_id=row[3],
             agent_id=row[4],
             thread_id=row[5],
             incoming_message=row[6],
@@ -333,7 +333,7 @@ async def claim_next(
         logger.info(
             "message_claimed",
             message_id=message.id,
-            phone=message.phone_number,
+            external_id=message.external_id,
             agent_id=message.agent_id,
             attempt=message.attempts,
         )
@@ -457,7 +457,7 @@ async def mark_failed(
 
 async def upsert_conversation(
     pool: AsyncConnectionPool,
-    phone_number: str,
+    external_id: str,
     agent_id: str,
     last_message: str,
 ) -> None:
@@ -468,25 +468,49 @@ async def upsert_conversation(
 
     Args:
         pool: Pool de conexões do psycopg.
-        phone_number: Telefone do remetente.
+        external_id: Identificador do remetente (IGSID do Instagram).
         agent_id: ID do agente.
         last_message: Última mensagem processada.
     """
-    thread_id = f"{phone_number}:{agent_id}"
+    thread_id = f"{external_id}:{agent_id}"
 
     async with pool.connection() as conn:
         await conn.execute(
             """
             INSERT INTO conversations (
-                phone_number, agent_id, thread_id,
+                external_id, agent_id, thread_id,
                 last_message, last_message_at, message_count)
             VALUES (%s, %s, %s, %s, NOW(), 1)
-            ON CONFLICT (phone_number, agent_id) DO UPDATE SET
+            ON CONFLICT (external_id, agent_id) DO UPDATE SET
                 last_message = EXCLUDED.last_message,
                 last_message_at = NOW(),
                 message_count = conversations.message_count + 1,
                 updated_at = NOW()
             """,
-            (phone_number, agent_id, thread_id, last_message),
+            (external_id, agent_id, thread_id, last_message),
         )
         await conn.commit()
+
+
+async def get_last_inbound_at(
+    pool: AsyncConnectionPool,
+    external_id: str,
+) -> datetime | None:
+    """Retorna quando o contato enviou a última mensagem, ou None se nunca.
+
+    Base da regra de 24h do Instagram: só é possível enviar mensagem a quem
+    escreveu para a conta nas últimas 24h. A fila registra toda mensagem
+    recebida (created_at), então não precisa de tabela extra.
+
+    Args:
+        pool: Pool de conexões do psycopg.
+        external_id: Identificador do contato (IGSID do Instagram).
+    """
+    async with pool.connection() as conn:
+        cursor = await conn.execute(
+            "SELECT MAX(created_at) FROM message_queue WHERE external_id = %s",
+            (external_id,),
+        )
+        row = await cursor.fetchone()
+
+    return row[0] if row else None

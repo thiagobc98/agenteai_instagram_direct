@@ -13,7 +13,7 @@ from langchain_core.tools import InjectedToolArg, tool
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.base import BaseStore
 
-from whatsapp_langchain.agents.tools._runtime import extract_phone
+from whatsapp_langchain.agents.tools._runtime import extract_user_id
 from whatsapp_langchain.shared.config import settings
 
 logger = structlog.get_logger()
@@ -21,11 +21,11 @@ logger = structlog.get_logger()
 
 def _extract_namespace(runtime: Any) -> tuple[tuple[str, str] | None, str | None]:
     """Resolve namespace de memória a partir do user_id."""
-    phone, error = extract_phone(runtime)
+    user_id, error = extract_user_id(runtime)
     if error:
         return None, error
-    assert phone is not None
-    return (phone, "memories"), None
+    assert user_id is not None
+    return (user_id, "memories"), None
 
 
 @tool

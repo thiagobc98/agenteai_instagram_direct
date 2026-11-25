@@ -1,15 +1,22 @@
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatDateTime, formatPhone, relativeTime } from "../../lib/format";
-import { IconX } from "../icons";
+import {
+  contactLabel,
+  formatAgentName,
+  formatDateTime,
+  formatWhatsapp,
+  relativeTime,
+  whatsappLink,
+} from "../../lib/format";
+import { IconPhone, IconX } from "../icons";
 import styles from "./CustomerPanel.module.css";
 
 export default function CustomerPanel({
-  phone,
+  externalId,
   chat,
   onClose,
 }: {
-  phone: string;
+  externalId: string;
   chat?: Chat;
   onClose: () => void;
 }) {
@@ -23,9 +30,22 @@ export default function CustomerPanel({
       </div>
 
       <div className={styles.profile}>
-        <Avatar seed={phone} size={72} />
-        <p className={styles.name}>{formatPhone(phone)}</p>
-        <p className="muted">{phone}</p>
+        <Avatar seed={externalId} size={72} src={chat?.profile_pic_url} />
+        <p className={styles.name}>
+          {chat ? contactLabel(chat) : contactLabel({ external_id: externalId })}
+        </p>
+        {chat?.name && chat.username && <p className="muted">{chat.name}</p>}
+        <p className="muted">ID Instagram: {externalId}</p>
+        {chat?.username && (
+          <a
+            href={`https://instagram.com/${chat.username}`}
+            target="_blank"
+            rel="noreferrer"
+            className="muted"
+          >
+            Abrir perfil no Instagram
+          </a>
+        )}
       </div>
 
       {!chat ? (
@@ -34,6 +54,21 @@ export default function CustomerPanel({
         </p>
       ) : (
         <>
+          {chat.whatsapp && (
+            <div className={styles.section}>
+              <span className={styles.sectionTitle}>Contato</span>
+              <a
+                href={whatsappLink(chat.whatsapp) ?? undefined}
+                target="_blank"
+                rel="noreferrer"
+                className={styles.whatsappLink}
+              >
+                <IconPhone size={16} />
+                {formatWhatsapp(chat.whatsapp)}
+              </a>
+            </div>
+          )}
+
           <div className={styles.section}>
             <span className={styles.sectionTitle}>Atendimento</span>
             <dl className={styles.list}>

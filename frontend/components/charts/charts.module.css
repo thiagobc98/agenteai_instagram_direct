@@ -1,0 +1,165 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.span2 {
+  grid-column: span 2;
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.cardSub {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.empty {
+  margin: 1.5rem 0;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.88rem;
+}
+
+.svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.axis {
+  fill: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* ---------- Ranking (barras horizontais) ---------- */
+
+.rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rankHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.86rem;
+  color: var(--text-primary);
+  margin-bottom: 0.3rem;
+}
+
+.rankTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  overflow: hidden;
+}
+
+.rankFill {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 3px;
+}
+
+/* ---------- Rosca ---------- */
+
+.donutWrap {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+.donut {
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+}
+
+.donutTotal {
+  fill: var(--text-primary);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+}
+
+.legend strong {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.legend small {
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Legenda inline (séries dos gráficos de linha) */
+.keys {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.keys span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+@media (max-width: 900px) {
+  .span2 {
+    grid-column: span 1;
+  }
+}

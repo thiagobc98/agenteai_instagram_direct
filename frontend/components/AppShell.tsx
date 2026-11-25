@@ -1,17 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { AdminUser } from "../lib/api";
 import Avatar from "./Avatar";
 import {
   IconAgents,
-  IconCalendar,
   IconChats,
   IconDashboard,
+  IconFacebook,
+  IconGrid,
   IconLogout,
   IconMenu,
+  IconPublish,
+  IconQr,
+  IconTrendUp,
   IconX,
 } from "./icons";
 import styles from "./AppShell.module.css";
@@ -19,9 +24,32 @@ import styles from "./AppShell.module.css";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: IconDashboard },
   { href: "/chats", label: "Conversas", icon: IconChats },
-  { href: "/agenda", label: "Agenda", icon: IconCalendar },
+  { href: "/posts", label: "Postagens", icon: IconGrid },
+  { href: "/facebook", label: "Facebook", icon: IconFacebook },
+  { href: "/publish", label: "Publicar", icon: IconPublish },
+  { href: "/marketing", label: "Marketing", icon: IconTrendUp },
+  { href: "/whatsapp", label: "WhatsApp", icon: IconQr },
   { href: "/agents", label: "Agentes", icon: IconAgents },
 ];
+
+function Brand() {
+  return (
+    <div className={styles.brand}>
+      <Image
+        src="/logo-loja.jpg"
+        alt="Logo Patricia Berberich"
+        width={38}
+        height={38}
+        unoptimized
+        className={styles.brandLogo}
+      />
+      <div className={styles.navLabel}>
+        <p className={styles.brandName}>Central Berberich</p>
+        <p className={styles.brandSub}>Atendimento Instagram</p>
+      </div>
+    </div>
+  );
+}
 
 export default function AppShell({
   user,
@@ -66,20 +94,14 @@ export default function AppShell({
         >
           <IconMenu size={20} />
         </button>
-        <div className={styles.brand}>
-          <span className={styles.brandMark}>W</span>
-          <span>WhatsApp CRM</span>
-        </div>
+        <Brand />
         <div className={styles.topbarUser}>
           <Avatar seed={user.username} size={30} />
         </div>
       </header>
 
       <aside className={styles.sidebar}>
-        <div className={styles.brand}>
-          <span className={styles.brandMark}>W</span>
-          <span className={styles.navLabel}>WhatsApp CRM</span>
-        </div>
+        <Brand />
 
         {nav}
 
@@ -99,10 +121,7 @@ export default function AppShell({
         <div className={styles.overlay} onClick={() => setMobileOpen(false)}>
           <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
             <div className={styles.drawerHeader}>
-              <div className={styles.brand}>
-                <span className={styles.brandMark}>W</span>
-                <span>WhatsApp CRM</span>
-              </div>
+              <Brand />
               <button
                 className={styles.iconButton}
                 onClick={() => setMobileOpen(false)}

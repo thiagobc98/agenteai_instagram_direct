@@ -40,17 +40,35 @@ class Settings(BaseSettings):
     log_level: str = "info"
     log_json: bool = False  # True em prod para logs estruturados
 
-    # --- Evolution API (WhatsApp) ---
-    # URL base da instância Evolution API na sua VPS (ex: https://evo.seudominio.com)
-    evolution_base_url: str = ""
-    # apikey da instância (Settings -> API Key no manager, ou definida na criação)
-    evolution_api_key: str = ""
-    # Nome da instância conectada ao WhatsApp
-    evolution_instance: str = ""
-    # Token secreto próprio (não vem do Evolution) usado para validar que o
-    # POST em /webhook/evolution/{token} realmente veio da sua instância —
-    # o Evolution não assina os webhooks como o Twilio faz.
-    evolution_webhook_token: str = ""
+    # --- Instagram Direct (Instagram Messaging API) ---
+    # Veja docs/INSTAGRAM_API.md para o passo a passo completo.
+    # Token de acesso usado no envio (Instagram User access token no fluxo
+    # "Instagram Login"; Page Access Token no fluxo "Facebook Login").
+    instagram_access_token: SecretStr | None = None
+    # App Secret do app Meta — usado para validar a assinatura
+    # X-Hub-Signature-256 dos webhooks (HMAC-SHA256 do body bruto).
+    instagram_app_secret: SecretStr | None = None
+    # Token próprio (você inventa) informado no painel da Meta ao cadastrar o
+    # webhook — a Meta o devolve no GET de verificação (hub.verify_token).
+    instagram_verify_token: SecretStr | None = None
+    # ID da conta profissional do Instagram. Opcional: se preenchido, eventos
+    # cujo remetente é a própria conta são descartados (evita loop).
+    instagram_business_account_id: str = ""
+    # Versão da Graph API usada nas chamadas de envio.
+    instagram_graph_api_version: str = "v25.0"
+    # Host da Graph API: graph.instagram.com (Instagram Login, padrão) ou
+    # graph.facebook.com (Facebook Login com Página vinculada).
+    instagram_graph_base_url: str = "https://graph.instagram.com"
+
+    # --- Publicação (Feed, Story, Reels) ---
+    # URL pública HTTPS por onde a Meta baixa a mídia enviada pelo painel
+    # (ex: https://seu-dominio ou o túnel ngrok em dev). Sem ela, ou com
+    # localhost, a publicação falha com aviso claro: a Meta não alcança.
+    public_base_url: str = ""
+    # Pasta onde a API guarda a mídia enviada pelo painel até publicar.
+    media_storage_dir: str = "data/media"
+    # Teto de upload por arquivo (Reels aceita até 300 MB na Meta).
+    media_max_upload_mb: int = 300
 
     # --- Rate Limit ---
     rate_limit_per_hour: int = 30
@@ -132,16 +150,33 @@ class Settings(BaseSettings):
     business_hour_end: int = 18
     appointment_duration_minutes: int = 30
 
-    # --- Notificações proativas (fora do ciclo normal de webhook) ---
-    # WhatsApp da médica (E.164) para receber a agenda do dia seguinte a
-    # cada agendamento/remarcação/cancelamento. Vazio desabilita o aviso.
-    doctor_whatsapp_number: str = ""
-    # Hora (0-23, fuso business_timezone) em que os pacientes com consulta
-    # no dia seguinte recebem o lembrete de confirmação.
-    patient_reminder_hour: int = 9
-    # Hora (0-23, fuso business_timezone) em que a médica recebe o resumo
-    # fixo com a agenda do dia seguinte.
-    doctor_summary_hour: int = 20
+    # WhatsApp da atendente humana (Patrícia). Precisa ser o mesmo número que o
+    # prompt manda incluir em todo encaminhamento: o painel identifica "cliente
+    # encaminhado à Patrícia" pelas respostas do bot que contêm esses dígitos.
+    handoff_phone: str = "31993456562"
+
+    # --- Página do Facebook (comentários dos posts) ---
+    # Veja docs/FACEBOOK.md. Tudo vazio desliga a tela do Facebook.
+    # ID da Página (Configurações da Página -> Transparência, ou /me no token).
+    facebook_page_id: str = ""
+    # Page Access Token (de longa duração) com pages_read_engagement,
+    # pages_read_user_content, pages_manage_engagement e pages_messaging.
+    facebook_page_access_token: SecretStr | None = None
+    # App Secret do app Meta (Configurações do app -> Básico). É DIFERENTE da
+    # "chave secreta do app do Instagram": valida a assinatura dos webhooks da
+    # Página e gera o appsecret_proof das chamadas à Graph API.
+    facebook_app_secret: SecretStr | None = None
+    # Token que você inventa e informa ao assinar o webhook da Página. Vazio
+    # reaproveita o INSTAGRAM_VERIFY_TOKEN.
+    facebook_verify_token: SecretStr | None = None
+    facebook_graph_api_version: str = "v25.0"
+
+    # Wuzapi: número de WhatsApp que manda avisos de mensagens novas do Direct
+    # para o celular do atendente (tela "WhatsApp" do painel). Vazio desliga.
+    wuzapi_api_url: str = ""
+    wuzapi_token: SecretStr | None = None
+    # Só para o painel criar a instância sozinho no primeiro "Conectar"
+    wuzapi_admin_token: SecretStr | None = None
 
 
 # Singleton — importar de qualquer lugar do projeto

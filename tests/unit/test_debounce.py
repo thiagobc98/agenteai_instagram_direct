@@ -3,8 +3,8 @@
 Valida as regras de debounce da Fase 3:
 - Debounce somente para texto.
 - Mensagem com mídia não faz debounce (entrada imediata).
-- Antes de inserir mídia, flush de texto pendente do mesmo phone+agent.
-- Isolamento por agent_id e phone_number.
+- Antes de inserir mídia, flush de texto pendente do mesmo external_id+agent.
+- Isolamento por agent_id e external_id.
 - Concorrência protegida por pg_advisory_xact_lock.
 - Interação correta entre debounce e retry/lease.
 
@@ -102,7 +102,7 @@ class TestTextDebounce:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Olá",
         )
@@ -111,13 +111,13 @@ class TestTextDebounce:
         assert result.message_id == 42
 
     async def test_rapid_text_concatenates_body(self, mock_pool):
-        """Textos rápidos do mesmo phone+agent concatenam no body."""
+        """Textos rápidos do mesmo external_id+agent concatenam no body."""
         pool, conn = mock_pool
         setup_existing_text(conn, existing_id=10, existing_body="Oi")
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Tudo bem?",
         )
@@ -141,7 +141,7 @@ class TestTextDebounce:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Como vai?",
         )
@@ -159,7 +159,7 @@ class TestTextDebounce:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Mais texto",
             buffer_seconds=3.0,
@@ -177,7 +177,7 @@ class TestTextDebounce:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Texto",
         )
@@ -194,7 +194,7 @@ class TestTextDebounce:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Texto puro",
         )
@@ -218,7 +218,7 @@ class TestMediaNoDebounce:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="",
             media_url="https://example.com/media/img.jpg",
@@ -241,7 +241,7 @@ class TestMediaNoDebounce:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Foto do recibo",
             media_url="https://example.com/media/img.jpg",
@@ -263,7 +263,7 @@ class TestMediaNoDebounce:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Olha essa foto",
             media_base64="aGVsbG8=",
@@ -290,7 +290,7 @@ class TestMediaFlushPendingText:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="",
             media_url="https://example.com/media/img.jpg",
@@ -307,17 +307,17 @@ class TestMediaFlushPendingText:
         assert "status = 'queued'" in flush_sql
         assert "process_after > NOW()" in flush_sql
         assert "media_url IS NULL" in flush_sql
-        # Params: phone_number, agent_id
-        assert flush_params == ("+5511999999999", "assistant")
+        # Params: external_id, agent_id
+        assert flush_params == ("17841400000000001", "assistant")
 
-    async def test_flush_only_same_phone_and_agent(self, mock_pool):
-        """Flush é isolado por phone_number + agent_id."""
+    async def test_flush_only_same_sender_and_agent(self, mock_pool):
+        """Flush é isolado por external_id + agent_id."""
         pool, conn = mock_pool
         setup_media_with_pending(conn)
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511111111111",
+            external_id="17841400000000002",
             agent_id="bot_a",
             body="",
             media_url="https://example.com/media/audio.ogg",
@@ -327,7 +327,7 @@ class TestMediaFlushPendingText:
         # calls[0]=lock, calls[1]=UPDATE(flush)
         calls = conn.execute.call_args_list
         flush_params = calls[1][0][1]
-        assert flush_params == ("+5511111111111", "bot_a")
+        assert flush_params == ("17841400000000002", "bot_a")
 
     async def test_no_pending_text_skips_flush_log(self, mock_pool):
         """Se não há texto pendente, flush é no-op (rowcount=0)."""
@@ -336,7 +336,7 @@ class TestMediaFlushPendingText:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="",
             media_url="https://example.com/media/img.jpg",
@@ -353,7 +353,7 @@ class TestMediaFlushPendingText:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="",
             media_url="https://example.com/media/img2.jpg",
@@ -377,7 +377,7 @@ class TestAgentIsolation:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="bot_b",
             body="Olá bot B",
         )
@@ -395,7 +395,7 @@ class TestAgentIsolation:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="custom_agent",
             body="Teste",
         )
@@ -406,17 +406,17 @@ class TestAgentIsolation:
         assert "agent_id = %s" in select_sql
 
 
-class TestPhoneIsolation:
-    """Debounce é isolado por phone_number."""
+class TestExternalIdIsolation:
+    """Debounce é isolado por external_id."""
 
-    async def test_different_phones_no_debounce(self, mock_pool):
+    async def test_different_senders_no_debounce(self, mock_pool):
         """Mensagens de telefones diferentes não fazem debounce."""
         pool, conn = mock_pool
         setup_no_existing(conn)
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5522222222222",
+            external_id="17841400000000003",
             agent_id="assistant",
             body="Olá",
         )
@@ -424,8 +424,8 @@ class TestPhoneIsolation:
         # calls[0]=lock, calls[1]=SELECT
         calls = conn.execute.call_args_list
         select_params = calls[1][0][1]
-        # O SELECT filtra por phone_number
-        assert select_params[0] == "+5522222222222"
+        # O SELECT filtra por external_id
+        assert select_params[0] == "17841400000000003"
 
 
 class TestDebounceWithRetry:
@@ -438,7 +438,7 @@ class TestDebounceWithRetry:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Texto",
         )
@@ -455,7 +455,7 @@ class TestDebounceWithRetry:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Texto",
         )
@@ -474,7 +474,7 @@ class TestDebounceWithRetry:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Texto",
         )
@@ -493,7 +493,7 @@ class TestSequentialTextThenMedia:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Foto",
             media_url="https://example.com/media/img.jpg",
@@ -520,7 +520,7 @@ class TestSequentialTextThenMedia:
 
         result = await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Descreva a imagem",
         )
@@ -534,16 +534,16 @@ class TestSequentialTextThenMedia:
 
 
 class TestThreadIdGeneration:
-    """Thread ID é gerado como phone:agent_id."""
+    """Thread ID é gerado como external_id:agent_id."""
 
     async def test_thread_id_format(self, mock_pool):
-        """Thread ID segue formato 'phone:agent_id'."""
+        """Thread ID segue formato 'external_id:agent_id'."""
         pool, conn = mock_pool
         setup_no_existing(conn)
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="secretaria",
             body="Olá",
         )
@@ -552,7 +552,7 @@ class TestThreadIdGeneration:
         calls = conn.execute.call_args_list
         insert_params = calls[2][0][1]
         # thread_id é o 5o param (index 4)
-        assert insert_params[4] == "+5511999999999:secretaria"
+        assert insert_params[4] == "17841400000000001:secretaria"
 
 
 class TestAdvisoryLock:
@@ -565,7 +565,7 @@ class TestAdvisoryLock:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Olá",
         )
@@ -575,7 +575,7 @@ class TestAdvisoryLock:
         assert "pg_advisory_xact_lock" in lock_sql
 
     async def test_lock_uses_deterministic_key(self, mock_pool):
-        """Chave do lock é determinística para o mesmo phone+agent."""
+        """Chave do lock é determinística para o mesmo external_id+agent."""
         import hashlib
 
         pool, conn = mock_pool
@@ -583,7 +583,7 @@ class TestAdvisoryLock:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="Olá",
         )
@@ -592,7 +592,7 @@ class TestAdvisoryLock:
         lock_key = calls[0][0][1][0]
 
         # Calcula o esperado
-        thread_id = "+5511999999999:assistant"
+        thread_id = "17841400000000001:assistant"
         expected = int.from_bytes(
             hashlib.sha256(thread_id.encode()).digest()[:8],
             byteorder="big",
@@ -600,8 +600,8 @@ class TestAdvisoryLock:
         )
         assert lock_key == expected
 
-    async def test_different_phone_different_lock(self, mock_pool):
-        """Phones diferentes geram locks diferentes."""
+    async def test_different_sender_different_lock(self, mock_pool):
+        """Remetentes diferentes geram locks diferentes."""
         import hashlib
 
         pool, conn = mock_pool
@@ -609,7 +609,7 @@ class TestAdvisoryLock:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5522222222222",
+            external_id="17841400000000003",
             agent_id="assistant",
             body="Olá",
         )
@@ -617,8 +617,8 @@ class TestAdvisoryLock:
         calls = conn.execute.call_args_list
         lock_key = calls[0][0][1][0]
 
-        # Lock de outro phone deve ser diferente
-        other_thread = "+5511999999999:assistant"
+        # Lock de outro remetente deve ser diferente
+        other_thread = "17841400000000001:assistant"
         other_key = int.from_bytes(
             hashlib.sha256(other_thread.encode()).digest()[:8],
             byteorder="big",
@@ -633,7 +633,7 @@ class TestAdvisoryLock:
 
         await enqueue_or_buffer(
             pool,
-            phone_number="+5511999999999",
+            external_id="17841400000000001",
             agent_id="assistant",
             body="",
             media_url="https://example.com/media/img.jpg",

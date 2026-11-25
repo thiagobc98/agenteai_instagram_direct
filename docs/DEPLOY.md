@@ -7,7 +7,7 @@ reverso com TLS, prontos para uma VPS via Docker Compose.
 ## Escopo desta fase
 
 Incluído:
-- tudo da Fase 2/3 (webhook Evolution API real, fila, worker, checkpointer, memória)
+- tudo da Fase 2/3 (webhook do Instagram real, fila, worker, checkpointer, memória)
 - Admin Panel (Next.js) com login e sessão
 - rotas `/api/*` protegidas por autenticação (cookie de sessão)
 - rate limit distribuído via Redis (substitui o rate limit em memória)
@@ -55,6 +55,16 @@ A API e o worker devem compartilhar:
 - `DOMAIN` — domínio público (DNS A record apontando para a VPS), usado
   pelo Caddy para emitir o certificado TLS
 
+Para a tela **Publicar** (Feed, Story, Reels):
+- `PUBLIC_BASE_URL` — URL pública HTTPS da API (ex: `https://SEU-DOMINIO`).
+  A Meta baixa a mídia de `<PUBLIC_BASE_URL>/media/<token>`, então essa rota
+  precisa estar acessível da internet. O Caddy já roteia `/media/*` para a API.
+- Volume persistente na **API** em `MEDIA_STORAGE_DIR` (`/app/data/media` no
+  Docker). No docker-compose já existe o volume `media_data`. **No Railway,
+  crie um Volume no serviço `api` montado em `/app/data/media`**: sem ele, a
+  mídia some a cada deploy e publicações agendadas falham. O worker não
+  precisa do volume, porque só passa a URL para a Meta.
+
 Recomendadas para operação:
 - `LOG_JSON=true`
 - `SESSION_COOKIE_SECURE=true` (produção — cookie só via HTTPS)
@@ -70,6 +80,31 @@ Recomendadas para operação:
 
 Veja `.env.example` para a lista completa.
 
+### Comentários da Página do Facebook
+
+Opcional. `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN` e
+`FACEBOOK_APP_SECRET` na api e no worker, e o webhook do objeto **Page**
+(campo `feed`) em `https://$DOMAIN/webhook/facebook`. Passo a passo e notas de
+segurança em [FACEBOOK.md](FACEBOOK.md).
+
+### Avisos no WhatsApp do atendente (Wuzapi)
+
+A cada mensagem nova no Direct, um número de WhatsApp conectado pelo QR Code
+(tela **WhatsApp** do painel) manda um aviso ao celular do atendente. Opcional:
+sem as variáveis abaixo, os avisos ficam desligados e o resto funciona normal.
+
+- Serviço `wuzapi` (imagem `asternic/wuzapi:1.1.0`, já no `docker-compose.yml`),
+  com volume persistente em `/data`. **No Railway**: crie um serviço a partir da
+  imagem, com Volume em `/data`, e aponte `WUZAPI_API_URL` da api e do worker
+  para o endereço interno dele (`http://<serviço>.railway.internal:8080`).
+- `WUZAPI_TOKEN`, `WUZAPI_ADMIN_TOKEN` (api e worker) e
+  `WUZAPI_GLOBAL_ENCRYPTION_KEY` (no serviço do Wuzapi). Guarde a chave de
+  criptografia fora do servidor: sem ela, a sessão se perde e pede QR Code de novo.
+- O Wuzapi não precisa de porta pública: só a api e o worker falam com ele.
+- Depois do deploy: painel → **WhatsApp** → Conectar → ler o QR Code com o
+  celular que vai **enviar** os avisos (não o do atendente) → cadastrar o
+  celular do atendente → **Enviar teste**.
+
 ## Ordem de subida
 
 1. Registrar o DNS (`DOMAIN` → IP da VPS) antes do primeiro start —
@@ -79,7 +114,7 @@ Veja `.env.example` para a lista completa.
 4. Verificar `curl -I https://$DOMAIN/health` (API) e
    `curl -I https://$DOMAIN/` (frontend).
 5. Acessar `https://$DOMAIN/login` e autenticar com `ADMIN_USERNAME`/`ADMIN_PASSWORD`.
-6. Enviar mensagem de teste real via WhatsApp/Evolution API.
+6. Cadastrar `https://$DOMAIN/webhook/instagram?agent=secretaria` como callback no painel da Meta (veja [INSTAGRAM_API.md](INSTAGRAM_API.md)) e enviar uma mensagem de teste real pelo Instagram Direct.
 7. Acompanhar `/api/metrics` (autenticado) e logs.
 
 ## Deploy com Docker
@@ -98,12 +133,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f
 ```
 
-## Firewall
+## Firewall e portas
 
-As portas `5432` (db), `6379` (redis), `8000` (api) e `3000` (frontend)
-continuam publicadas no host pelo `docker-compose.yml` (útil para debug
-local). Em produção, feche-as externamente e deixe só `22` (SSH), `80` e
-`443` acessíveis:
+No `docker-compose.yml` (desenvolvimento) as portas `5432` (db), `6379` (redis),
+`8000` (api) e `3000` (frontend) ficam publicadas no host, para facilitar o debug.
+**O `docker-compose.prod.yml` despublica todas elas**: em produção só o proxy
+expõe `80` e `443`, e os serviços conversam pela rede interna do compose.
+
+> ⚠️ Não confie só no `ufw` para proteger portas de containers: o Docker escreve
+> direto no iptables e **ignora** as regras do ufw. Por isso a proteção real é
+> não publicar a porta (o que o override de produção já faz). Sempre suba com
+> os dois arquivos (`-f docker-compose.yml -f docker-compose.prod.yml`).
+
+Use o `ufw` só para o resto do servidor:
 
 ```bash
 sudo ufw allow 22/tcp
@@ -111,6 +153,9 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw enable
 ```
+
+Confira de fora, depois do deploy, que só 80/443 respondem
+(`nmap -p 22,80,443,3000,5432,6379,8000 <IP>`).
 
 ## Backup do banco
 
@@ -145,12 +190,19 @@ a stack local, nunca contra produção.
 - health check responde 200 (`/health`, sem autenticação)
 - `message_queue` recebe mensagens
 - worker faz transição `queued -> processing -> done|failed`
-- memória semântica persiste em `store` com prefixo `<phone_number>.memories`
+- memória semântica persiste em `store` com prefixo `<external_id>.memories`
 - retries acontecem quando há erro transitório
 - login no admin panel funciona; `/api/*` retorna 401 sem sessão
-- rate limit (429) aparece sob carga alta de um mesmo telefone (ver stress test)
+- rate limit (429) aparece sob carga alta de um mesmo contato (ver stress test)
 - certificado TLS válido emitido pelo Caddy
-- portas internas fechadas no firewall (só 22/80/443 externas)
+- portas internas NÃO publicadas (só 80/443 respondem; confira com `nmap` de fora)
+- `INSTAGRAM_ACCESS_TOKEN` de longa duração com renovação planejada (expira; envio falha com `instagram_token_invalid`)
+- app da Meta em modo Live (App Review aprovado) para atender clientes reais
+- token com `instagram_business_manage_comments` (respostas a comentários),
+  `instagram_business_content_publish` (tela Publicar) e
+  `instagram_business_manage_insights` (métricas para o agente de marketing)
+- `curl -I https://SEU-DOMINIO/media/inexistente.jpg` responde 404 (rota
+  pública no ar). Uma publicação de teste em Story chega ao perfil
 - backup agendado no crontab e testado (restore manual)
 - logs estruturados habilitados (`LOG_JSON=true`)
 

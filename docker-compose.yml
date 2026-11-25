@@ -9,6 +9,7 @@
 
 services:
   db:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.db
@@ -26,6 +27,7 @@ services:
       retries: 5
 
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -35,6 +37,7 @@ services:
       retries: 5
 
   api:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -45,6 +48,10 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/whatsapp_langchain
       REDIS_URL: redis://redis:6379/0
       LOG_JSON: "true"
+      MEDIA_STORAGE_DIR: /app/data/media
+    # Mídia das publicações (a Meta baixa daqui via /media/<token>)
+    volumes:
+      - media_data:/app/data/media
     depends_on:
       db:
         condition: service_healthy
@@ -52,6 +59,7 @@ services:
         condition: service_healthy
 
   worker:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.worker
@@ -66,7 +74,25 @@ services:
       redis:
         condition: service_healthy
 
+  wuzapi:
+    # WhatsApp (whatsmeow) que manda os avisos de mensagens novas do Direct
+    # para o celular do atendente. Conectar/QR Code: tela "WhatsApp" do painel.
+    # Só envia: a instância não tem webhook. Sem "ports": a API e o Worker
+    # falam com ele pela rede interna (http://wuzapi:8080).
+    restart: unless-stopped
+    image: asternic/wuzapi:1.1.0
+    command: ["--logtype=json", "--skipmedia", "--datadir=/data"]
+    environment:
+      TZ: America/Sao_Paulo
+      WUZAPI_ADMIN_TOKEN: ${WUZAPI_ADMIN_TOKEN:-}
+      WUZAPI_GLOBAL_ENCRYPTION_KEY: ${WUZAPI_GLOBAL_ENCRYPTION_KEY:-}
+      SESSION_DEVICE_NAME: Berberich Avisos
+      WUZAPI_SOCKET_RECOVERY: "true"
+    volumes:
+      - wuzapi_data:/data
+
   frontend:
+    restart: unless-stopped
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -80,3 +106,6 @@ services:
 
 volumes:
   postgres_data:
+  media_data:
+  # Sessão do WhatsApp do Wuzapi: sem ele, QR Code de novo a cada deploy
+  wuzapi_data:

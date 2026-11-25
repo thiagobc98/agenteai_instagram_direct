@@ -1,4 +1,11 @@
-import { IconAlertCircle, IconCheck, IconClock, IconMic, IconPhoto } from "../icons";
+import {
+  IconAlertCircle,
+  IconCheck,
+  IconClock,
+  IconExternal,
+  IconMic,
+  IconPhoto,
+} from "../icons";
 import styles from "./MessageBubble.module.css";
 
 export interface BubbleData {
@@ -10,6 +17,12 @@ export interface BubbleData {
   pending?: boolean;
   failed?: boolean;
   errorText?: string | null;
+  /** Selo acima do texto (ex: "Comentou no post"). */
+  label?: string;
+  /** Link opcional ao lado do selo (ex: o post comentado). */
+  href?: string | null;
+  /** "comment": texto de um comentário público, não mensagem do Direct. */
+  variant?: "comment";
 }
 
 export default function MessageBubble({ data }: { data: BubbleData }) {
@@ -20,8 +33,19 @@ export default function MessageBubble({ data }: { data: BubbleData }) {
       <div
         className={`${styles.bubble} ${isUser ? styles.userBubble : styles.agentBubble} ${
           data.failed ? styles.failedBubble : ""
-        }`}
+        } ${data.variant === "comment" ? styles.commentBubble : ""}`}
       >
+        {data.label && (
+          <span className={styles.label}>
+            {data.label}
+            {data.href && (
+              <a href={data.href} target="_blank" rel="noopener noreferrer" className={styles.labelLink}>
+                ver post <IconExternal size={11} />
+              </a>
+            )}
+          </span>
+        )}
+
         {data.mediaType && (
           <span className={styles.mediaChip}>
             {data.mediaType.startsWith("audio") ? <IconMic size={13} /> : <IconPhoto size={13} />}

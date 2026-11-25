@@ -12,12 +12,16 @@ Exemplo:
 
 from whatsapp_langchain.agents.middleware.context import get_context_middleware
 from whatsapp_langchain.agents.middleware.greeting import create_greeting_middleware
+from whatsapp_langchain.agents.middleware.stale_history import (
+    create_stale_history_filter,
+)
 from whatsapp_langchain.agents.middleware.summarize import create_summarize_middleware
 from whatsapp_langchain.agents.middleware.trim import create_trim_middleware
 
 __all__ = [
     "get_context_middleware",
     "create_greeting_middleware",
+    "create_stale_history_filter",
     "create_trim_middleware",
     "create_summarize_middleware",
 ]

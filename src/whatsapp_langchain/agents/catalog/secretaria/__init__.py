@@ -1,4 +1,4 @@
-"""Agente secretaria - assistente da comunidade Top Hawks.
+"""Agente secretaria - atendente virtual da loja Patricia Berberich (Instagram).
 
 Este é o agente padrão do projeto, usado como exemplo e template
 para criar novos agentes.

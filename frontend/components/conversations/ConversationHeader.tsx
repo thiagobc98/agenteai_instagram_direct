@@ -1,17 +1,22 @@
 import Link from "next/link";
 import type { Chat } from "../../lib/api";
 import Avatar from "../Avatar";
-import { formatAgentName, formatPhone, relativeTime } from "../../lib/format";
-import { IconArrowLeft, IconInfo } from "../icons";
+import {
+  contactLabel,
+  formatAgentName,
+  relativeTime,
+  whatsappLink,
+} from "../../lib/format";
+import { IconArrowLeft, IconInfo, IconPhone } from "../icons";
 import styles from "./ConversationHeader.module.css";
 
 export default function ConversationHeader({
-  phone,
+  externalId,
   chat,
   infoOpen,
   onToggleInfo,
 }: {
-  phone: string;
+  externalId: string;
   chat?: Chat;
   infoOpen: boolean;
   onToggleInfo: () => void;
@@ -22,13 +27,16 @@ export default function ConversationHeader({
         <IconArrowLeft size={18} />
       </Link>
 
-      <Avatar seed={phone} size={40} />
+      <Avatar seed={externalId} size={40} src={chat?.profile_pic_url} />
 
       <div className={styles.info}>
-        <p className={styles.name}>{formatPhone(phone)}</p>
+        <p className={styles.name}>
+          {chat ? contactLabel(chat) : contactLabel({ external_id: externalId })}
+        </p>
         <p className={styles.sub}>
           {chat ? (
             <>
+              {chat.name ? `${chat.name} · ` : ""}
               {formatAgentName(chat.agent_id)} · última atividade {relativeTime(chat.last_message_at)}
             </>
           ) : (
@@ -36,6 +44,18 @@ export default function ConversationHeader({
           )}
         </p>
       </div>
+
+      {chat && whatsappLink(chat.whatsapp) && (
+        <a
+          href={whatsappLink(chat.whatsapp) ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className={styles.whatsappButton}
+          title="Chamar no WhatsApp"
+        >
+          <IconPhone size={17} />
+        </a>
+      )}
 
       <button
         className={`${styles.infoButton} ${infoOpen ? styles.infoButtonActive : ""}`}

@@ -2,8 +2,8 @@ import { IconPaperclip, IconSend } from "../icons";
 import styles from "./MessageInput.module.css";
 
 // O envio de mensagens pelo painel não existe no backend hoje: o agente de
-// IA responde automaticamente às mensagens recebidas via WhatsApp. Mantemos
-// o composer visível (para consistência do layout tipo WhatsApp Web) porém
+// IA responde automaticamente às mensagens recebidas no Instagram Direct. Mantemos
+// o composer visível (para consistência do layout de caixa de entrada) porém
 // desabilitado, em vez de simular um envio que não tem efeito real.
 export default function MessageInput() {
   return (

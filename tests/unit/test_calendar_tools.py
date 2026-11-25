@@ -24,7 +24,7 @@ TZ = ZoneInfo("America/Sao_Paulo")
 MODULE = "whatsapp_langchain.agents.tools.calendar"
 
 
-def _make_runtime(*, user_id: str | None = "+5511999999999"):
+def _make_runtime(*, user_id: str | None = "17841400000000001"):
     configurable = {"thread_id": "thread-test"}
     if user_id:
         configurable["user_id"] = user_id
@@ -110,7 +110,7 @@ class TestBookAppointment:
         assert "agendada com sucesso" in result.lower()
         create_mock.assert_called_once()
         assert create_mock.call_args.kwargs["patient_name"] == "Maria"
-        assert create_mock.call_args.kwargs["phone"] == "+5511999999999"
+        assert create_mock.call_args.kwargs["external_id"] == "17841400000000001"
 
     def test_rejects_when_slot_busy(self):
         runtime = _make_runtime()
@@ -135,7 +135,9 @@ class TestBookAppointment:
 class TestRescheduleAppointment:
     def test_returns_message_when_no_appointment(self):
         runtime = _make_runtime()
-        with patch(f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[])):
+        with patch(
+            f"{MODULE}.find_events_by_external_id", new=AsyncMock(return_value=[])
+        ):
             result = asyncio.run(
                 reschedule_fn(_future_date(), "15:00", runtime=runtime)
             )
@@ -147,7 +149,8 @@ class TestRescheduleAppointment:
         update_mock = AsyncMock()
         with (
             patch(
-                f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[existing])
+                f"{MODULE}.find_events_by_external_id",
+                new=AsyncMock(return_value=[existing]),
             ),
             patch(f"{MODULE}.get_busy_intervals", new=AsyncMock(return_value=[])),
             patch(f"{MODULE}.update_event", new=update_mock),
@@ -163,7 +166,9 @@ class TestRescheduleAppointment:
 class TestCancelAppointment:
     def test_returns_message_when_no_appointment(self):
         runtime = _make_runtime()
-        with patch(f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[])):
+        with patch(
+            f"{MODULE}.find_events_by_external_id", new=AsyncMock(return_value=[])
+        ):
             result = asyncio.run(cancel_fn(runtime=runtime))
         assert "não encontrei" in result.lower()
 
@@ -173,7 +178,8 @@ class TestCancelAppointment:
         delete_mock = AsyncMock()
         with (
             patch(
-                f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[existing])
+                f"{MODULE}.find_events_by_external_id",
+                new=AsyncMock(return_value=[existing]),
             ),
             patch(f"{MODULE}.delete_event", new=delete_mock),
         ):
@@ -185,7 +191,9 @@ class TestCancelAppointment:
 class TestListMyAppointments:
     def test_returns_message_when_empty(self):
         runtime = _make_runtime()
-        with patch(f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[])):
+        with patch(
+            f"{MODULE}.find_events_by_external_id", new=AsyncMock(return_value=[])
+        ):
             result = asyncio.run(list_fn(runtime=runtime))
         assert "não tem nenhuma consulta" in result.lower()
 
@@ -193,7 +201,8 @@ class TestListMyAppointments:
         runtime = _make_runtime()
         existing = _event("evt1", datetime.now(TZ) + timedelta(days=1))
         with patch(
-            f"{MODULE}.find_events_by_phone", new=AsyncMock(return_value=[existing])
+            f"{MODULE}.find_events_by_external_id",
+            new=AsyncMock(return_value=[existing]),
         ):
             result = asyncio.run(list_fn(runtime=runtime))
         assert "próximas consultas" in result.lower()

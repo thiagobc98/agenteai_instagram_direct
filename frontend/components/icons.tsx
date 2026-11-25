@@ -213,3 +213,129 @@ export const IconCross = (p: IconProps = {}) =>
     </>,
     p,
   );
+
+export const IconUserPlus = (p: IconProps = {}) =>
+  base(
+    <>
+      <circle cx="9.5" cy="8" r="3.5" />
+      <path d="M3 20a6.5 6.5 0 0 1 13 0" />
+      <path d="M19 8v6M16 11h6" />
+    </>,
+    p,
+  );
+
+export const IconPhone = (p: IconProps = {}) =>
+  base(
+    <path d="M21 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 1.1 4.2 2 2 0 0 1 3.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L7.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />,
+    p,
+  );
+
+export const IconRepeat = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a3 3 0 0 1-3 3H3" />
+    </>,
+    p,
+  );
+
+export const IconTrendUp = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="m22 7-8.5 8.5-5-5L2 17" />
+      <path d="M16 7h6v6" />
+    </>,
+    p,
+  );
+
+export const IconGrid = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.3" cy="6.7" r="0.6" fill="currentColor" />
+    </>,
+    p,
+  );
+
+export const IconSparkle = (p: IconProps = {}) =>
+  base(
+    <path d="M12 3.5 13.8 9a2 2 0 0 0 1.2 1.2l5.5 1.8-5.5 1.8a2 2 0 0 0-1.2 1.2L12 20.5 10.2 15A2 2 0 0 0 9 13.8L3.5 12 9 10.2A2 2 0 0 0 10.2 9z" />,
+    p,
+  );
+
+export const IconExternal = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M20 4 10 14" />
+      <path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" />
+    </>,
+    p,
+  );
+
+export const IconPublish = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M12 8v8" />
+      <path d="M8 12h8" />
+    </>,
+    p,
+  );
+
+export const IconUpload = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+    </>,
+    p,
+  );
+
+export const IconTrash = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M9 7V4h6v3" />
+    </>,
+    p,
+  );
+
+export const IconVideo = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </>,
+    p,
+  );
+
+export const IconQr = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />
+    </>,
+    p,
+  );
+
+export const IconBell = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>,
+    p,
+  );
+
+export const IconFacebook = (p: IconProps = {}) =>
+  base(<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />, p);

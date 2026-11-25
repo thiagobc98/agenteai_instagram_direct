@@ -115,7 +115,7 @@ Quando `store` é fornecido:
 
 Para funcionar corretamente, o runtime precisa receber:
 - `thread_id` (conversa)
-- `user_id` (identidade do usuário; neste projeto vem do telefone no payload do Evolution API)
+- `user_id` (identidade do usuário; neste projeto é o IGSID (`external_id`) do contato no payload do Instagram)
 
 Exemplo de `config` em invoke:
 

@@ -1,4 +1,4 @@
-"""Agente secretaria - assistente da comunidade Top Hawks.
+"""Agente secretaria - atendente virtual da loja Patricia Berberich (Instagram).
 
 Agente simples usando create_agent do LangChain 1.0.
 Usa middleware de contexto configurável (trim ou summarize)
@@ -18,12 +18,16 @@ Configuração via .env:
     MEMORY_ENABLED=true                # Habilita memória semântica
 """
 
+from typing import NotRequired
+
 from langchain.agents import create_agent
+from langchain.agents.middleware import AgentState
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.store.base import BaseStore
 
 from whatsapp_langchain.agents.middleware import (
     create_greeting_middleware,
+    create_stale_history_filter,
     get_context_middleware,
 )
 from whatsapp_langchain.agents.tools import (
@@ -34,12 +38,38 @@ from whatsapp_langchain.agents.tools import (
     list_my_appointments,
     read_memory,
     reschedule_appointment,
+    save_customer_whatsapp,
     save_memory,
 )
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.llm import create_chat_model
 
 from .prompts import SYSTEM_PROMPT
+
+# Como a atendente se apresenta na primeira mensagem (ver middleware de saudação).
+GREETING_INTRO = "Aqui quem fala é a Juliana, atendente virtual da Patricia Berberich"
+
+# Trechos de respostas antigas (de quando o agente era de uma clínica) que ainda
+# estão no histórico salvo das conversas. São escondidos do modelo para ele não
+# imitar a persona errada.
+STALE_REPLY_MARKERS = ("Dra. Luana Lima",)
+
+
+class SecretariaState(AgentState):
+    """Estado do agente: mensagens + @ e WhatsApp da cliente.
+
+    `username` e `customer_whatsapp` são preenchidos pelo processor a cada
+    mensagem (tabela `contacts`) e lidos pelo middleware de saudação — o
+    primeiro para mencionar a cliente pelo @, o segundo para o agente saber
+    se já pode pular direto para o encaminhamento à Patrícia. Nenhum dos dois
+    é acumulativo (sem reducer): cada chamada sobrescreve com o valor atual.
+    """
+
+    username: NotRequired[str | None]
+    customer_whatsapp: NotRequired[str | None]
+    # Comentário que trouxe a cliente ao Direct + mensagem privada já enviada
+    # (dict simples, serializável no checkpoint). Ver shared/comments.py.
+    comment_context: NotRequired[dict | None]
 
 
 def build_graph(
@@ -75,15 +105,25 @@ def build_graph(
     # Modelo principal com rate limiter centralizado (shared/llm.py)
     model = create_chat_model()
 
-    # Middleware de contexto baseado em CONTEXT_STRATEGY, mais a saudação
-    # dinâmica (bom dia/tarde/noite) recalculada a cada chamada ao modelo
-    middleware = [*get_context_middleware(), create_greeting_middleware(SYSTEM_PROMPT)]
+    # Middleware de contexto baseado em CONTEXT_STRATEGY, o filtro de respostas
+    # antigas do histórico e a saudação dinâmica (bom dia/tarde/noite, primeira
+    # mensagem x cliente que voltou) recalculada a cada chamada ao modelo
+    middleware = [
+        *get_context_middleware(),
+        create_stale_history_filter(STALE_REPLY_MARKERS),
+        create_greeting_middleware(SYSTEM_PROMPT, GREETING_INTRO),
+    ]
 
     if enable_memory_tools is None:
         enable_memory_tools = store is not None
 
+    # save_customer_whatsapp: sempre disponível, independe de memória/agenda
+    # (ver "Antes de encaminhar para a Patrícia" em prompts.py)
+    tools = [save_customer_whatsapp]
+
     # Tools de memória — resolvem o store via InjectedStore em runtime
-    tools = [save_memory, read_memory] if enable_memory_tools else []
+    if enable_memory_tools:
+        tools += [save_memory, read_memory]
 
     # Tools de agendamento (Google Calendar) — só habilitadas se configuradas
     if settings.google_calendar_enabled:
@@ -101,6 +141,7 @@ def build_graph(
         tools=tools,
         system_prompt=SYSTEM_PROMPT,
         middleware=middleware,
+        state_schema=SecretariaState,
         checkpointer=checkpointer,
         store=store,
     )

@@ -1,6 +1,6 @@
 """Webhook síncrono — endpoint educacional para testes rápidos.
 
-Diferente do webhook Evolution (assíncrono via fila), este endpoint processa
+Diferente do webhook do Instagram (assíncrono via fila), este endpoint processa
 a mensagem inline e retorna a resposta diretamente. Útil para:
 - Testes rápidos sem Worker rodando
 - Entender o fluxo sem a complexidade da fila
@@ -11,7 +11,7 @@ NÃO usar em produção — não tem debounce, fila, retry ou rate limit.
 Uso:
     curl -X POST "http://localhost:8000/webhook/sync?agent=secretaria" \
          -H "Content-Type: application/json" \
-         -d '{"phone": "+5511999999999", "message": "Olá!"}'
+         -d '{"external_id": "17841400000000000", "message": "Olá!"}'
 """
 
 import structlog
@@ -30,7 +30,7 @@ router = APIRouter(tags=["webhook"])
 class SyncRequest(BaseModel):
     """Payload do webhook síncrono."""
 
-    phone: str = Field(description="Número do remetente (E.164)")
+    external_id: str = Field(description="Identificador do remetente (IGSID)")
     message: str = Field(description="Texto da mensagem")
 
 
@@ -60,7 +60,7 @@ async def webhook_sync(
     """
     logger.info(
         "webhook_sync_received",
-        phone=payload.phone,
+        external_id=payload.external_id,
         agent_id=agent,
     )
 
@@ -73,13 +73,13 @@ async def webhook_sync(
     graph = load_graph(agent, store=store)
 
     # Executa o agente
-    thread_id = f"{payload.phone}:{agent}"
+    thread_id = f"{payload.external_id}:{agent}"
     result = await graph.ainvoke(
         {"messages": [{"role": "user", "content": payload.message}]},
         config={
             "configurable": {
                 "thread_id": thread_id,
-                "user_id": payload.phone,
+                "user_id": payload.external_id,
             }
         },
     )
@@ -89,7 +89,7 @@ async def webhook_sync(
 
     logger.info(
         "webhook_sync_responded",
-        phone=payload.phone,
+        external_id=payload.external_id,
         agent_id=agent,
     )
 
