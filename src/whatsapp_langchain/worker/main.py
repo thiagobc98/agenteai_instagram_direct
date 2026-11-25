@@ -26,6 +26,7 @@ from whatsapp_langchain.worker.contacts import (
     backfill_contact_profiles,
     ensure_contact_profile,
 )
+from whatsapp_langchain.worker.facebook_client import build_facebook_client
 from whatsapp_langchain.worker.instagram_client import InstagramClient
 from whatsapp_langchain.worker.notifier import notification_loop
 from whatsapp_langchain.worker.processor import process_message
@@ -84,6 +85,11 @@ async def main() -> None:
     # Contatos que conversaram antes do painel mostrar o @username
     await backfill_contact_profiles(pool, instagram)
 
+    # Página do Facebook (opcional): legenda dos posts para os rascunhos de
+    # resposta aos comentários do Facebook
+    facebook = build_facebook_client()
+    logger.info("facebook_page_client_ready", configured=facebook is not None)
+
     # Avisos no WhatsApp do atendente: tarefa própria, fora do atendimento
     notifier = asyncio.create_task(notification_loop(pool))
 
@@ -102,7 +108,10 @@ async def main() -> None:
                 if not worked:
                     try:
                         worked = await draft_next_comment(
-                            pool, instagram, lease_seconds=settings.lease_seconds
+                            pool,
+                            instagram,
+                            facebook=facebook,
+                            lease_seconds=settings.lease_seconds,
                         )
                     except Exception as exc:
                         logger.error("comment_draft_loop_error", error=str(exc))

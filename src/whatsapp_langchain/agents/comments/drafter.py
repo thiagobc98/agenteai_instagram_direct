@@ -8,7 +8,10 @@ from dataclasses import dataclass
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from whatsapp_langchain.agents.comments.prompts import SYSTEM_PROMPT, build_user_message
+from whatsapp_langchain.agents.comments.prompts import (
+    build_system_prompt,
+    build_user_message,
+)
 from whatsapp_langchain.agents.middleware.handoff_context import expand_patricia_link
 from whatsapp_langchain.shared.llm import create_chat_model
 from whatsapp_langchain.worker.instagram_client import (
@@ -45,7 +48,7 @@ def _content_text(content: object) -> str:
     return str(content)
 
 
-def parse_draft(raw: str) -> CommentDraft:
+def parse_draft(raw: str, channel: str = "instagram") -> CommentDraft:
     """Interpreta o JSON devolvido pelo modelo.
 
     Tolera texto ou cerca de código ao redor do objeto JSON.
@@ -77,7 +80,8 @@ def parse_draft(raw: str) -> CommentDraft:
     if len(public) > MAX_COMMENT_CHARS:
         public = public[:MAX_COMMENT_CHARS].rsplit(" ", 1)[0]
     # Link da Patrícia sai sempre completo, mesmo se o modelo errou a cópia
-    private = expand_patricia_link(text("private"))
+    source = "Facebook" if channel == "facebook" else "Instagram"
+    private = expand_patricia_link(text("private"), source=source)
     if len(private.encode("utf-8")) > MAX_MESSAGE_BYTES:
         private = split_message(private, MAX_MESSAGE_BYTES)[0]
 
@@ -95,20 +99,26 @@ async def generate_draft(
     from_username: str | None,
     post_caption: str | None,
     is_reply: bool = False,
+    channel: str = "instagram",
 ) -> CommentDraft:
-    """Pede ao modelo o rascunho de resposta pública + privada."""
+    """Pede ao modelo o rascunho de resposta pública + privada.
+
+    `channel` ("instagram" ou "facebook") escolhe como chamar a pessoa e onde
+    fica a mensagem privada (Direct ou Messenger).
+    """
     model = create_chat_model(temperature=0.4)
     response = await model.ainvoke(
         [
-            SystemMessage(content=SYSTEM_PROMPT),
+            SystemMessage(content=build_system_prompt(channel)),
             HumanMessage(
                 content=build_user_message(
                     comment_text=comment_text,
                     from_username=from_username,
                     post_caption=post_caption,
                     is_reply=is_reply,
+                    channel=channel,
                 )
             ),
         ]
     )
-    return parse_draft(_content_text(response.content))
+    return parse_draft(_content_text(response.content), channel=channel)

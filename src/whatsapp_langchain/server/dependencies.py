@@ -84,6 +84,35 @@ async def validate_instagram_signature(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Invalid webhook signature")
 
 
+async def validate_facebook_signature(request: Request) -> None:
+    """Valida a assinatura X-Hub-Signature-256 do webhook da Página.
+
+    Os webhooks do objeto "page" são assinados com o App Secret do app Meta
+    (FACEBOOK_APP_SECRET), que é outra chave que não a "do app do
+    Instagram". Fail-closed: sem segredo configurado, nada é aceito.
+
+    Raises:
+        HTTPException 403: Se a assinatura está ausente ou não confere.
+        HTTPException 503: Se FACEBOOK_APP_SECRET não está configurado.
+    """
+    app_secret = settings.facebook_app_secret
+    if app_secret is None or not app_secret.get_secret_value():
+        logger.error("facebook_app_secret_not_configured")
+        raise HTTPException(status_code=503, detail="Facebook webhook not configured")
+
+    raw_body = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not verify_instagram_signature(
+        raw_body, signature, app_secret.get_secret_value()
+    ):
+        logger.warning(
+            "facebook_signature_invalid",
+            has_signature=bool(signature),
+            body_bytes=len(raw_body),
+        )
+        raise HTTPException(status_code=403, detail="Invalid webhook signature")
+
+
 async def check_rate_limit(external_id: str) -> None:
     """Verifica rate limit por remetente (IGSID).
 

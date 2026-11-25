@@ -155,6 +155,22 @@ class Settings(BaseSettings):
     # encaminhado à Patrícia" pelas respostas do bot que contêm esses dígitos.
     handoff_phone: str = "31993456562"
 
+    # --- Página do Facebook (comentários dos posts) ---
+    # Veja docs/FACEBOOK.md. Tudo vazio desliga a tela do Facebook.
+    # ID da Página (Configurações da Página -> Transparência, ou /me no token).
+    facebook_page_id: str = ""
+    # Page Access Token (de longa duração) com pages_read_engagement,
+    # pages_read_user_content, pages_manage_engagement e pages_messaging.
+    facebook_page_access_token: SecretStr | None = None
+    # App Secret do app Meta (Configurações do app -> Básico). É DIFERENTE da
+    # "chave secreta do app do Instagram": valida a assinatura dos webhooks da
+    # Página e gera o appsecret_proof das chamadas à Graph API.
+    facebook_app_secret: SecretStr | None = None
+    # Token que você inventa e informa ao assinar o webhook da Página. Vazio
+    # reaproveita o INSTAGRAM_VERIFY_TOKEN.
+    facebook_verify_token: SecretStr | None = None
+    facebook_graph_api_version: str = "v25.0"
+
     # Wuzapi: número de WhatsApp que manda avisos de mensagens novas do Direct
     # para o celular do atendente (tela "WhatsApp" do painel). Vazio desliga.
     wuzapi_api_url: str = ""

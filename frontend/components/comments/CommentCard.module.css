@@ -260,3 +260,15 @@
   letter-spacing: 0.04em;
   color: var(--text-tertiary);
 }
+
+.viewLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.viewLink:hover {
+  text-decoration: underline;
+}

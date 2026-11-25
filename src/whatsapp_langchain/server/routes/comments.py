@@ -1,4 +1,9 @@
-"""Rotas do painel para postagens e comentários do Instagram.
+"""Rotas do painel para postagens e comentários (Instagram e Facebook).
+
+Os dois canais usam as mesmas rotas, com `?channel=instagram|facebook`
+(padrão: instagram, o comportamento de antes). Cada comentário guarda o seu
+canal; aprovar responde pela rede de onde ele veio. A sincronização dos posts
+do Facebook fica em `routes/facebook.py`.
 
 A IA (Worker) deixa um rascunho de resposta pública + privada em cada
 comentário novo; aqui o painel lista, edita, aprova (publica), ignora ou
@@ -24,6 +29,11 @@ from whatsapp_langchain.server.dependencies import require_admin_session
 from whatsapp_langchain.shared import comments as store
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
+from whatsapp_langchain.worker.facebook_client import (
+    FacebookGraphError,
+    FacebookPageClient,
+    build_facebook_client,
+)
 from whatsapp_langchain.worker.instagram_client import (
     MAX_COMMENT_CHARS,
     InstagramClient,
@@ -44,6 +54,9 @@ PENDING_STATUSES = ("new", "drafting", "pending", "failed")
 # Agente do Direct (o mesmo do `?agent=` do webhook): a mensagem privada de um
 # comentário entra na conversa do Direct desse agente no painel.
 DIRECT_AGENT_ID = "secretaria"
+
+Channel = Literal["instagram", "facebook"]
+CHANNEL_QUERY = Query(default="instagram", description="instagram | facebook")
 
 
 def _instagram() -> InstagramClient:
@@ -72,6 +85,39 @@ def _graph_error(exc: InstagramSendError) -> HTTPException:
     return HTTPException(status_code=502, detail=detail)
 
 
+def facebook_client_or_503() -> FacebookPageClient:
+    facebook = build_facebook_client()
+    if facebook is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Página do Facebook não configurada "
+            "(FACEBOOK_PAGE_ID e FACEBOOK_PAGE_ACCESS_TOKEN no .env)",
+        )
+    return facebook
+
+
+def facebook_error(exc: FacebookGraphError) -> HTTPException:
+    """Erro da Graph API do Facebook em mensagem clara para o painel."""
+    if exc.is_token_invalid:
+        detail = "Token da Página do Facebook inválido ou expirado."
+    elif exc.is_permission_error:
+        detail = (
+            "O token da Página não tem permissão para isso (confira "
+            "pages_read_engagement, pages_manage_engagement e pages_messaging)."
+        )
+    else:
+        detail = f"Facebook recusou: {exc.detail}"
+    return HTTPException(status_code=502, detail=detail)
+
+
+def _send_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, FacebookGraphError):
+        return facebook_error(exc)
+    if isinstance(exc, InstagramSendError):
+        return _graph_error(exc)
+    return HTTPException(status_code=422, detail=str(exc))
+
+
 def _parse_time(value: object) -> datetime:
     if isinstance(value, str):
         try:
@@ -87,11 +133,14 @@ def _parse_time(value: object) -> datetime:
 
 
 @router.get("/posts")
-async def get_posts(limit: int = Query(default=60, ge=1, le=200)) -> dict:
-    """Postagens conhecidas, com contagem de comentários pendentes."""
+async def get_posts(
+    limit: int = Query(default=60, ge=1, le=200),
+    channel: Channel = CHANNEL_QUERY,
+) -> dict:
+    """Postagens conhecidas do canal, com contagem de comentários pendentes."""
     pool = await get_pool()
-    posts = await store.list_posts(pool, limit=limit)
-    counts = await store.comment_counts(pool)
+    posts = await store.list_posts(pool, limit=limit, channel=channel)
+    counts = await store.comment_counts(pool, channel=channel)
     pending = sum(counts.get(s, 0) for s in PENDING_STATUSES)
     return {"posts": posts, "counts": counts, "pending_total": pending}
 
@@ -187,7 +236,9 @@ async def get_post(media_id: str) -> dict:
     post = await store.get_post(pool, media_id)
     if post is None:
         raise HTTPException(status_code=404, detail="Postagem não encontrada")
-    comments = await store.list_comments(pool, media_id=media_id, limit=500)
+    comments = await store.list_comments(
+        pool, media_id=media_id, limit=500, channel=post["channel"]
+    )
     return {"post": post, "comments": comments}
 
 
@@ -201,6 +252,7 @@ async def get_comments(
     status: str = Query(default="pending", description="pending | all | <status>"),
     limit: int = Query(default=100, ge=1, le=500),
     order: Literal["newest", "oldest"] = Query(default="oldest"),
+    channel: Channel = CHANNEL_QUERY,
 ) -> dict:
     """Fila de aprovação (padrão) ou comentários de um status específico."""
     pool = await get_pool()
@@ -211,7 +263,11 @@ async def get_comments(
     else:
         statuses = (status,)
     comments = await store.list_comments(
-        pool, statuses=statuses, limit=limit, newest_first=order == "newest"
+        pool,
+        statuses=statuses,
+        limit=limit,
+        newest_first=order == "newest",
+        channel=channel,
     )
 
     posts = {}
@@ -249,8 +305,17 @@ async def approve_comment(
             status_code=422, detail="Resposta privada passa de 1000 bytes"
         )
 
-    instagram = _instagram()
     pool = await get_pool()
+    existing = await store.get_comment(pool, comment_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Comentário não encontrado")
+    # Cliente da rede do comentário. Falta de configuração vira 503 ANTES de
+    # reservar o comentário (senão ele ficaria preso em `sending`).
+    sender: InstagramClient | FacebookPageClient = (
+        facebook_client_or_503()
+        if existing["channel"] == store.FACEBOOK
+        else _instagram()
+    )
 
     comment = await store.claim_for_sending(pool, comment_id, approved_by=admin)
     if comment is None:
@@ -264,12 +329,10 @@ async def approve_comment(
 
     if not comment["reply_public_id"]:
         try:
-            reply_id = await instagram.reply_to_comment(comment_id, public_text)
-        except (InstagramSendError, ValueError) as exc:
+            reply_id = await sender.reply_to_comment(comment_id, public_text)
+        except (InstagramSendError, FacebookGraphError, ValueError) as exc:
             await store.mark_reply_failed(pool, comment_id, str(exc))
-            if isinstance(exc, InstagramSendError):
-                raise _graph_error(exc) from exc
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise _send_error(exc) from exc
         except Exception as exc:
             await store.mark_reply_failed(pool, comment_id, str(exc))
             raise
@@ -278,11 +341,11 @@ async def approve_comment(
     private_id = private_error = None
     if private_text and not comment["reply_private_id"]:
         try:
-            private_id = await instagram.send_private_reply(comment_id, private_text)
+            private_id = await sender.send_private_reply(comment_id, private_text)
         except Exception as exc:
             private_error = (
-                _graph_error(exc).detail
-                if isinstance(exc, InstagramSendError)
+                _send_error(exc).detail
+                if isinstance(exc, InstagramSendError | FacebookGraphError)
                 else str(exc)
             )
             logger.warning(
@@ -296,7 +359,9 @@ async def approve_comment(
         private_text=private_text if private_id else None,
         private_error=private_error,
     )
-    if private_id and comment.get("from_id"):
+    # Só o Instagram tem a tela de conversas do Direct; no Facebook a
+    # mensagem fica no Messenger da Página
+    if private_id and comment.get("from_id") and comment["channel"] != store.FACEBOOK:
         # Best-effort: a resposta já saiu; falhar aqui só tira a conversa da
         # lista do painel, então não pode virar erro para quem aprovou
         try:

@@ -35,8 +35,9 @@ from whatsapp_langchain.shared.config import settings
 MAX_WHATSAPP_ASKS = 2
 
 # Mensagem que já vem escrita quando a cliente abre o link: a Patrícia sabe
-# de onde ela veio sem precisar perguntar.
-PREFILLED_TEXT = "Oi, Patrícia! Vim pelo Instagram da loja 😊"
+# de onde ela veio sem precisar perguntar ({source}: Instagram ou Facebook).
+PREFILLED_TEMPLATE = "Oi, Patrícia! Vim pelo {source} da loja 😊"
+PREFILLED_TEXT = PREFILLED_TEMPLATE.format(source="Instagram")
 
 
 def whatsapp_link(phone: str, text: str = PREFILLED_TEXT) -> str:
@@ -54,14 +55,19 @@ PATRICIA_LINK = whatsapp_link(settings.handoff_phone, text="")
 PATRICIA_FULL_LINK = whatsapp_link(settings.handoff_phone)
 
 
-def expand_patricia_link(text: str) -> str:
+def expand_patricia_link(text: str, source: str = "Instagram") -> str:
     """Troca o link curto da Patrícia (com ou sem parâmetros, com ou sem
-    https://) pelo link completo. Outros links ficam como estão."""
+    https://) pelo link completo, com a mensagem pronta dizendo de onde a
+    cliente veio (`source`). Outros links ficam como estão."""
     if not text:
         return text
+    full = whatsapp_link(
+        settings.handoff_phone, PREFILLED_TEMPLATE.format(source=source)
+    )
     digits = PATRICIA_LINK.rsplit("/", 1)[1]
     pattern = rf"(?:https?://)?(?:api\.)?wa\.me/{digits}(?:[/?][^\s)\]]*)?"
-    return re.sub(pattern, PATRICIA_FULL_LINK, text)
+    # Função (não string) no re.sub: o link tem "%" e "\" não seria escape
+    return re.sub(pattern, lambda _m: full, text)
 
 
 def build_handoff_section(customer_whatsapp: str | None, ask_count: int = 0) -> str:

@@ -150,8 +150,12 @@ export interface Dashboard {
   handoff_queue: HandoffContact[];
 }
 
+/** Rede de onde vêm a postagem e os comentários. */
+export type Channel = "instagram" | "facebook";
+
 export interface Post {
   media_id: string;
+  channel?: Channel;
   caption: string | null;
   media_type: string | null;
   media_url: string | null;
@@ -177,6 +181,7 @@ export type CommentStatus =
 
 export interface PostComment {
   comment_id: string;
+  channel?: Channel;
   media_id: string;
   parent_id: string | null;
   from_id: string | null;
@@ -212,6 +217,15 @@ export interface PostDetailResponse {
 export interface CommentQueueResponse {
   comments: PostComment[];
   posts: Record<string, Post>;
+}
+
+export interface FacebookStatus {
+  configured: boolean;
+  /** Variáveis que faltam no .env (só os nomes) */
+  missing: string[];
+  page: { id: string; name: string } | null;
+  error: string | null;
+  pending_total: number;
 }
 
 export interface SyncResponse {
@@ -418,15 +432,22 @@ export const api = {
       `/api/chats/${encodeURIComponent(externalId)}?limit=${limit}&offset=${offset}`,
     ),
 
-  posts: () => request<PostsResponse>("/api/posts"),
+  posts: (channel: Channel = "instagram") =>
+    request<PostsResponse>(`/api/posts?channel=${channel}`),
 
   syncPosts: () => request<SyncResponse>("/api/posts/sync", { method: "POST" }),
+
+  facebookStatus: () => request<FacebookStatus>("/api/facebook/status"),
+
+  syncFacebook: () => request<SyncResponse>("/api/facebook/sync", { method: "POST" }),
 
   post: (mediaId: string) =>
     request<PostDetailResponse>(`/api/posts/${encodeURIComponent(mediaId)}`),
 
-  commentQueue: (order: "newest" | "oldest" = "newest") =>
-    request<CommentQueueResponse>(`/api/comments?status=pending&order=${order}`),
+  commentQueue: (order: "newest" | "oldest" = "newest", channel: Channel = "instagram") =>
+    request<CommentQueueResponse>(
+      `/api/comments?status=pending&order=${order}&channel=${channel}`,
+    ),
 
   approveComment: (commentId: string, publicText: string, privateText: string) =>
     request<{ comment: PostComment }>(

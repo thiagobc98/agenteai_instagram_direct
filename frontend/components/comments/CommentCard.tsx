@@ -3,15 +3,16 @@
 // Um comentário de postagem com o rascunho de resposta da IA.
 //
 // Pendente: mostra as duas respostas (pública, embaixo do comentário, e
-// privada, no Direct de quem comentou) em campos editáveis, com Aprovar e
+// privada, no Direct ou Messenger de quem comentou) em campos editáveis, com Aprovar e
 // publicar / Refazer com IA / Ignorar. Respondido: mostra o que foi publicado.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, type Post, type PostComment } from "../../lib/api";
+import { CHANNELS, channelOf } from "../../lib/channels";
 import { relativeTime } from "../../lib/format";
 import Avatar from "../Avatar";
-import { IconAlertCircle, IconCheck, IconClock, IconSparkle } from "../icons";
+import { IconAlertCircle, IconCheck, IconClock, IconExternal, IconSparkle } from "../icons";
 import styles from "./CommentCard.module.css";
 
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
@@ -35,11 +36,14 @@ function byteLength(text: string): number {
 export default function CommentCard({
   comment,
   post,
+  postPermalink,
   onChange,
 }: {
   comment: PostComment;
   // Só na fila de aprovação (todas as postagens): mostra de qual post é.
   post?: Post;
+  // Na página de um post (sem `post`): link dele, para abrir o comentário
+  postPermalink?: string | null;
   onChange: (updated: PostComment) => void;
 }) {
   const [publicText, setPublicText] = useState(comment.draft_public ?? "");
@@ -81,12 +85,19 @@ export default function CommentCard({
     }
   }
 
-  const author = comment.from_username ? `@${comment.from_username}` : "Usuário do Instagram";
+  const channel = CHANNELS[channelOf(comment)];
+  const author = channel.author(comment.from_username);
+  const profileUrl = channel.profileUrl(comment.from_username);
+  // Abre o comentário na rede: útil quando a Meta não informa o autor
+  const commentUrl = channel.commentUrl(post?.permalink ?? postPermalink, comment.comment_id);
 
   return (
     <article className={`card ${styles.card} ${closed ? styles.closed : ""}`}>
       {post && (
-        <Link className={styles.postRef} href={`/posts/${encodeURIComponent(post.media_id)}`}>
+        <Link
+          className={styles.postRef}
+          href={`${channel.basePath}/${encodeURIComponent(post.media_id)}`}
+        >
           {(post.thumbnail_url || post.media_url) && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -104,12 +115,8 @@ export default function CommentCard({
         <Avatar seed={comment.from_id || comment.comment_id} size={34} />
         <div className={styles.who}>
           <p className={styles.author}>
-            {comment.from_username ? (
-              <a
-                href={`https://instagram.com/${comment.from_username}`}
-                target="_blank"
-                rel="noreferrer"
-              >
+            {profileUrl ? (
+              <a href={profileUrl} target="_blank" rel="noopener noreferrer">
                 {author}
               </a>
             ) : (
@@ -117,7 +124,22 @@ export default function CommentCard({
             )}
             {comment.parent_id && <span className={styles.replyTag}>resposta</span>}
           </p>
-          <p className={styles.time}>{relativeTime(comment.commented_at)}</p>
+          <p className={styles.time}>
+            {relativeTime(comment.commented_at)}
+            {commentUrl && (
+              <>
+                {" · "}
+                <a
+                  href={commentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={styles.viewLink}
+                >
+                  Ver no {channel.name} <IconExternal size={11} />
+                </a>
+              </>
+            )}
+          </p>
         </div>
         <span className={`${styles.badge} ${styles[status.tone]}`}>
           {status.tone === "success" && <IconCheck size={12} />}
@@ -168,7 +190,8 @@ export default function CommentCard({
 
           <label className={styles.field}>
             <span className={styles.fieldLabel}>
-              Mensagem privada <small>no Direct de quem comentou, deixe vazio para não enviar</small>
+              Mensagem privada{" "}
+              <small>no {channel.dm} de quem comentou, deixe vazio para não enviar</small>
             </span>
             <textarea
               value={privateText}
@@ -249,7 +272,7 @@ export default function CommentCard({
           )}
           {comment.reply_private_text && (
             <div className={styles.reply}>
-              <span className={styles.replyLabel}>Mensagem no Direct</span>
+              <span className={styles.replyLabel}>Mensagem no {channel.dm}</span>
               <p>{comment.reply_private_text}</p>
             </div>
           )}

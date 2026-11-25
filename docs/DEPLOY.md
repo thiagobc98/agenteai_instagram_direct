@@ -80,6 +80,13 @@ Recomendadas para operação:
 
 Veja `.env.example` para a lista completa.
 
+### Comentários da Página do Facebook
+
+Opcional. `FACEBOOK_PAGE_ID`, `FACEBOOK_PAGE_ACCESS_TOKEN` e
+`FACEBOOK_APP_SECRET` na api e no worker, e o webhook do objeto **Page**
+(campo `feed`) em `https://$DOMAIN/webhook/facebook`. Passo a passo e notas de
+segurança em [FACEBOOK.md](FACEBOOK.md).
+
 ### Avisos no WhatsApp do atendente (Wuzapi)
 
 A cada mensagem nova no Direct, um número de WhatsApp conectado pelo QR Code

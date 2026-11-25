@@ -19,6 +19,12 @@ from psycopg_pool import AsyncConnectionPool
 
 logger = structlog.get_logger()
 
+# Canais com comentários (migration 013). Tudo que é "do Instagram" por padrão
+# continua igual; o Facebook passa o canal explicitamente.
+INSTAGRAM = "instagram"
+FACEBOOK = "facebook"
+CHANNELS = (INSTAGRAM, FACEBOOK)
+
 # Statuses em que o painel ainda pode agir sobre o comentário.
 ACTIONABLE_STATUSES = ("new", "drafting", "pending", "failed")
 
@@ -51,18 +57,19 @@ class CommentForDraft:
     attempts: int
     post_caption: str | None
     post_synced: bool
+    channel: str = INSTAGRAM
 
 
 _POST_COLUMNS = (
     "media_id, caption, media_type, media_url, thumbnail_url, permalink, "
-    "posted_at, comments_count, synced_at"
+    "posted_at, comments_count, synced_at, channel"
 )
 
 _COMMENT_COLUMNS = (
     "comment_id, media_id, parent_id, from_id, from_username, text, "
     "commented_at, status, draft_public, draft_private, ai_suggests_ignore, "
     "ai_reason, reply_public_id, reply_public_text, reply_private_id, "
-    "reply_private_text, private_error, error, sent_at, approved_by"
+    "reply_private_text, private_error, error, sent_at, approved_by, channel"
 )
 
 
@@ -81,6 +88,7 @@ def _post_row(row: tuple) -> dict:
         "posted_at": _iso(row[6]),
         "comments_count": row[7],
         "synced_at": _iso(row[8]),
+        "channel": row[9],
     }
 
 
@@ -106,6 +114,7 @@ def _comment_row(row: tuple) -> dict:
         "error": row[17],
         "sent_at": _iso(row[18]),
         "approved_by": row[19],
+        "channel": row[20],
     }
 
 
@@ -114,17 +123,23 @@ def _comment_row(row: tuple) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def upsert_post(pool: AsyncConnectionPool, post: dict) -> None:
-    """Cria ou atualiza uma postagem com os dados da Graph API (`/me/media`)."""
+async def upsert_post(
+    pool: AsyncConnectionPool, post: dict, channel: str = INSTAGRAM
+) -> None:
+    """Cria ou atualiza uma postagem com os dados da Graph API.
+
+    `post` segue o formato do Instagram (`/me/media`); o cliente do Facebook
+    converte os posts da Página para este mesmo formato.
+    """
     async with pool.connection() as conn:
         await conn.execute(
             """
             INSERT INTO ig_posts (media_id, caption, media_type, media_url,
                                   thumbnail_url, permalink, posted_at,
-                                  comments_count, synced_at)
+                                  comments_count, synced_at, channel)
             VALUES (%(id)s, %(caption)s, %(media_type)s, %(media_url)s,
                     %(thumbnail_url)s, %(permalink)s, %(timestamp)s,
-                    %(comments_count)s, NOW())
+                    %(comments_count)s, NOW(), %(channel)s)
             ON CONFLICT (media_id) DO UPDATE SET
                 caption = EXCLUDED.caption,
                 media_type = EXCLUDED.media_type,
@@ -144,12 +159,15 @@ async def upsert_post(pool: AsyncConnectionPool, post: dict) -> None:
                 "permalink": post.get("permalink"),
                 "timestamp": post.get("timestamp"),
                 "comments_count": post.get("comments_count"),
+                "channel": channel,
             },
         )
         await conn.commit()
 
 
-async def ensure_post_stub(pool: AsyncConnectionPool, media_id: str) -> None:
+async def ensure_post_stub(
+    pool: AsyncConnectionPool, media_id: str, channel: str = INSTAGRAM
+) -> None:
     """Garante uma linha da postagem (sem detalhes) para um comentário recebido.
 
     Os detalhes (legenda, imagem) são buscados depois pelo Worker ou na
@@ -157,8 +175,9 @@ async def ensure_post_stub(pool: AsyncConnectionPool, media_id: str) -> None:
     """
     async with pool.connection() as conn:
         await conn.execute(
-            "INSERT INTO ig_posts (media_id) VALUES (%s) ON CONFLICT DO NOTHING",
-            (media_id,),
+            "INSERT INTO ig_posts (media_id, channel) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (media_id, channel),
         )
         await conn.commit()
 
@@ -179,6 +198,7 @@ async def insert_comment(
     parent_id: str | None,
     commented_at: datetime,
     status: str = "new",
+    channel: str = INSTAGRAM,
 ) -> bool:
     """Grava um comentário recebido. Idempotente (a Meta reenvia eventos).
 
@@ -197,14 +217,16 @@ async def insert_comment(
             status = "ignored"
 
         await conn.execute(
-            "INSERT INTO ig_posts (media_id) VALUES (%s) ON CONFLICT DO NOTHING",
-            (media_id,),
+            "INSERT INTO ig_posts (media_id, channel) VALUES (%s, %s) "
+            "ON CONFLICT DO NOTHING",
+            (media_id, channel),
         )
         cursor = await conn.execute(
             """
             INSERT INTO ig_comments (comment_id, media_id, parent_id, from_id,
-                                     from_username, text, commented_at, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                     from_username, text, commented_at, status,
+                                     channel)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (comment_id) DO NOTHING
             RETURNING comment_id
             """,
@@ -217,6 +239,7 @@ async def insert_comment(
                 text,
                 commented_at,
                 status,
+                channel,
             ),
         )
         created = await cursor.fetchone() is not None
@@ -249,7 +272,8 @@ async def claim_next_comment_for_draft(
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )
-            RETURNING comment_id, media_id, text, from_username, parent_id, attempts
+            RETURNING comment_id, media_id, text, from_username, parent_id,
+                      attempts, channel
             """,
             (lease_seconds,),
         )
@@ -274,6 +298,7 @@ async def claim_next_comment_for_draft(
         attempts=row[5],
         post_caption=post[0] if post else None,
         post_synced=bool(post[1]) if post else False,
+        channel=row[6],
     )
 
 
@@ -460,14 +485,17 @@ async def mark_reply_failed(
 # ---------------------------------------------------------------------------
 
 
-async def list_posts(pool: AsyncConnectionPool, limit: int = 60) -> list[dict]:
-    """Postagens com contagem de comentários por status, mais recentes antes."""
+async def list_posts(
+    pool: AsyncConnectionPool, limit: int = 60, channel: str = INSTAGRAM
+) -> list[dict]:
+    """Postagens do canal com contagem de comentários por status, mais
+    recentes antes."""
     async with pool.connection() as conn:
         cursor = await conn.execute(
             """
             SELECT p.media_id, p.caption, p.media_type, p.media_url,
                    p.thumbnail_url, p.permalink, p.posted_at, p.comments_count,
-                   p.synced_at,
+                   p.synced_at, p.channel,
                    COUNT(c.comment_id) AS total,
                    COUNT(c.comment_id) FILTER (
                        WHERE c.status IN ('new', 'drafting', 'pending', 'failed')
@@ -475,20 +503,21 @@ async def list_posts(pool: AsyncConnectionPool, limit: int = 60) -> list[dict]:
                    MAX(c.commented_at) AS last_comment_at
             FROM ig_posts p
             LEFT JOIN ig_comments c ON c.media_id = p.media_id
+            WHERE p.channel = %s
             GROUP BY p.media_id
             ORDER BY COALESCE(p.posted_at, p.created_at) DESC
             LIMIT %s
             """,
-            (limit,),
+            (channel, limit),
         )
         rows = await cursor.fetchall()
 
     posts = []
     for row in rows:
-        post = _post_row(row[:9])
-        post["tracked_comments"] = row[9]
-        post["pending_comments"] = row[10]
-        post["last_comment_at"] = _iso(row[11])
+        post = _post_row(row[:10])
+        post["tracked_comments"] = row[10]
+        post["pending_comments"] = row[11]
+        post["last_comment_at"] = _iso(row[12])
         posts.append(post)
     return posts
 
@@ -510,6 +539,7 @@ async def list_comments(
     statuses: tuple[str, ...] | None = None,
     limit: int = 200,
     newest_first: bool = False,
+    channel: str | None = INSTAGRAM,
 ) -> list[dict]:
     """Comentários filtrados por postagem e/ou status.
 
@@ -518,6 +548,9 @@ async def list_comments(
     """
     where: list[str] = []
     params: list = []
+    if channel:
+        where.append("channel = %s")
+        params.append(channel)
     if media_id:
         where.append("media_id = %s")
         params.append(media_id)
@@ -550,11 +583,15 @@ async def get_comment(pool: AsyncConnectionPool, comment_id: str) -> dict | None
     return _comment_row(row) if row else None
 
 
-async def comment_counts(pool: AsyncConnectionPool) -> dict[str, int]:
-    """Total de comentários por status (para o resumo do painel)."""
+async def comment_counts(
+    pool: AsyncConnectionPool, channel: str = INSTAGRAM
+) -> dict[str, int]:
+    """Total de comentários do canal por status (resumo do painel)."""
     async with pool.connection() as conn:
         cursor = await conn.execute(
-            "SELECT status, COUNT(*) FROM ig_comments GROUP BY status"
+            "SELECT status, COUNT(*) FROM ig_comments WHERE channel = %s "
+            "GROUP BY status",
+            (channel,),
         )
         rows = await cursor.fetchall()
     return {row[0]: row[1] for row in rows}
@@ -593,6 +630,7 @@ async def recent_private_reply(
             FROM ig_comments c
             LEFT JOIN ig_posts p ON p.media_id = c.media_id
             WHERE c.from_id = %s
+              AND c.channel = 'instagram'
               AND c.reply_private_id IS NOT NULL
               AND c.reply_private_text <> ''
               AND c.sent_at > NOW() - make_interval(days => %s)
@@ -624,7 +662,8 @@ async def list_private_replies(
                    c.sent_at, c.approved_by, p.permalink, p.caption
             FROM ig_comments c
             LEFT JOIN ig_posts p ON p.media_id = c.media_id
-            WHERE c.from_id = %s AND c.reply_private_id IS NOT NULL
+            WHERE c.from_id = %s AND c.channel = 'instagram'
+              AND c.reply_private_id IS NOT NULL
             ORDER BY c.sent_at DESC
             LIMIT %s
             """,

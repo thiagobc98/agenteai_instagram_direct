@@ -73,10 +73,30 @@ def no_markdown(d: CommentDraft) -> str | None:
     return "markdown na resposta" if re.search(r"\*\*|__|^#", text, re.M) else None
 
 
+# Canal avaliado (--channel). No Instagram a pessoa é o @; no Facebook, o nome.
+CHANNEL = "instagram"
+AUTHOR = {"instagram": "cliente_teste", "facebook": "Vanessa Quites"}
+
+
 def mentions_author(d: CommentDraft) -> str | None:
     if d.ignore:
         return None
+    if CHANNEL == "facebook":
+        if "@" in d.public:
+            return "usou @ no Facebook (não vira marcação)"
+        return None if "Vanessa" in d.public else "não chama a pessoa pelo nome"
     return None if "@cliente_teste" in d.public else "não menciona o @ na pública"
+
+
+def right_channel(d: CommentDraft) -> str | None:
+    """Facebook: mensagem privada é no Messenger; citar o Direct confunde."""
+    if CHANNEL != "facebook":
+        return None
+    return (
+        "citou o Direct no Facebook"
+        if re.search(r"\bdirect\b", d.public + d.private, re.I)
+        else None
+    )
 
 
 def has_private(d: CommentDraft) -> str | None:
@@ -95,7 +115,7 @@ def sends_to_patricia(d: CommentDraft) -> str | None:
     problems = []
     if d.ignore:
         return "sugeriu ignorar uma pergunta de venda"
-    if not re.search(r"direct|dm|inbox", d.public, re.I):
+    if not re.search(r"direct|dm|inbox|messenger", d.public, re.I):
         problems.append("pública não avisa que chamou no Direct")
     if "wa.me/5531993456562" not in d.private:
         problems.append("privada sem o link da Patrícia")
@@ -123,6 +143,7 @@ BASE_CHECKS: list[Check] = [
     private_within_limit,
     public_is_short,
     no_markdown,
+    right_channel,
 ]
 
 
@@ -178,9 +199,10 @@ async def run_case(case: Case) -> tuple[CommentDraft | None, list[str]]:
     try:
         draft = await generate_draft(
             comment_text=case.comment,
-            from_username="cliente_teste",
+            from_username=AUTHOR[CHANNEL],
             post_caption=CAPTION,
             is_reply=case.is_reply,
+            channel=CHANNEL,
         )
     except Exception as exc:
         return None, [f"erro: {exc}"]
@@ -193,7 +215,12 @@ async def main() -> int:
     parser.add_argument("--repeat", type=int, default=1, help="Rodadas por caso")
     parser.add_argument("--only", help="Roda só os casos cujo nome contém este texto")
     parser.add_argument("--verbose", action="store_true", help="Mostra os rascunhos")
+    parser.add_argument(
+        "--channel", choices=["instagram", "facebook"], default="instagram"
+    )
     args = parser.parse_args()
+    global CHANNEL
+    CHANNEL = args.channel
 
     cases = [c for c in CASES if not args.only or args.only in c.name]
     total = passed = 0

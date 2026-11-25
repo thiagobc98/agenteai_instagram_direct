@@ -339,6 +339,7 @@ def stored_comment(**overrides) -> dict:
         "status": "sending",
         "reply_public_id": None,
         "reply_private_id": None,
+        "channel": "instagram",
     }
     base.update(overrides)
     return base
