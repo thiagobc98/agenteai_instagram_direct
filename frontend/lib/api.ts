@@ -362,6 +362,37 @@ export function uploadPublicationMedia(
   });
 }
 
+export interface WhatsappConnection {
+  configured: boolean;
+  online: boolean;
+  instance_exists: boolean;
+  connected: boolean;
+  logged_in: boolean;
+  number: string | null;
+  qr_code: string | null;
+  can_create_instance: boolean;
+  error: string | null;
+}
+
+export interface NotifySettings {
+  enabled: boolean;
+  recipients: string[];
+  updated_by: string | null;
+  updated_at: string | null;
+}
+
+export interface AttendantNotification {
+  id: number;
+  external_id: string;
+  username: string | null;
+  preview: string;
+  status: "pending" | "sending" | "sent" | "failed" | "skipped";
+  attempts: number;
+  error: string | null;
+  created_at: string | null;
+  sent_at: string | null;
+}
+
 export const api = {
   login: (username: string, password: string) =>
     request<AdminUser>("/api/auth/login", {
@@ -463,6 +494,34 @@ export const api = {
 
   cancelPublication: (id: number) =>
     request<{ ok: boolean }>(`/api/publications/${id}`, { method: "DELETE" }),
+
+  whatsappStatus: () =>
+    request<{ connection: WhatsappConnection; settings: NotifySettings }>(
+      "/api/whatsapp/status",
+    ),
+
+  whatsappConnect: () =>
+    request<{ connection: WhatsappConnection }>("/api/whatsapp/connect", { method: "POST" }),
+
+  whatsappDisconnect: () =>
+    request<{ connection: WhatsappConnection }>("/api/whatsapp/disconnect", {
+      method: "POST",
+    }),
+
+  saveNotifySettings: (enabled: boolean, recipients: string[]) =>
+    request<{ settings: NotifySettings }>("/api/whatsapp/settings", {
+      method: "PUT",
+      body: JSON.stringify({ enabled, recipients }),
+    }),
+
+  sendNotifyTest: () =>
+    request<{ results: { phone: string; ok: boolean; error: string | null }[] }>(
+      "/api/whatsapp/test",
+      { method: "POST" },
+    ),
+
+  attendantNotifications: () =>
+    request<{ notifications: AttendantNotification[] }>("/api/whatsapp/notifications"),
 
   marketingThreads: () => request<{ threads: MarketingThread[] }>("/api/marketing/threads"),
 

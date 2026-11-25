@@ -155,6 +155,13 @@ class Settings(BaseSettings):
     # encaminhado à Patrícia" pelas respostas do bot que contêm esses dígitos.
     handoff_phone: str = "31993456562"
 
+    # Wuzapi: número de WhatsApp que manda avisos de mensagens novas do Direct
+    # para o celular do atendente (tela "WhatsApp" do painel). Vazio desliga.
+    wuzapi_api_url: str = ""
+    wuzapi_token: SecretStr | None = None
+    # Só para o painel criar a instância sozinho no primeiro "Conectar"
+    wuzapi_admin_token: SecretStr | None = None
+
 
 # Singleton — importar de qualquer lugar do projeto
 settings = Settings()

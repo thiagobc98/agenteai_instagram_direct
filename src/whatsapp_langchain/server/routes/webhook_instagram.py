@@ -30,6 +30,7 @@ from whatsapp_langchain.server.dependencies import (
     check_rate_limit,
     validate_instagram_signature,
 )
+from whatsapp_langchain.shared.attendant_notify import enqueue_notification
 from whatsapp_langchain.shared.comments import insert_comment
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
@@ -191,6 +192,23 @@ async def webhook_instagram(
             buffer_seconds=settings.message_buffer_seconds,
         )
         enqueued += 1
+
+        # Aviso no WhatsApp do atendente (enviado pelo Worker). Best-effort:
+        # nunca pode impedir o atendimento nem fazer a Meta reenviar o lote
+        try:
+            await enqueue_notification(
+                pool,
+                external_id=parsed.external_id,
+                body=parsed.body,
+                media_type=parsed.media_type,
+                source_message_id=parsed.message_id,
+            )
+        except Exception as exc:
+            logger.warning(
+                "attendant_notification_enqueue_failed",
+                external_id=parsed.external_id,
+                error=str(exc),
+            )
 
         logger.info(
             "webhook_instagram_received",

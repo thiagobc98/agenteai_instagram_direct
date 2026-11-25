@@ -316,3 +316,23 @@ export const IconVideo = (p: IconProps = {}) =>
     </>,
     p,
   );
+
+export const IconQr = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3" />
+    </>,
+    p,
+  );
+
+export const IconBell = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>,
+    p,
+  );

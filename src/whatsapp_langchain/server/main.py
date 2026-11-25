@@ -31,6 +31,9 @@ from whatsapp_langchain.server.routes.webhook_instagram import (
 from whatsapp_langchain.server.routes.webhook_sync import (
     router as webhook_sync_router,
 )
+from whatsapp_langchain.server.routes.whatsapp_notify import (
+    router as whatsapp_notify_router,
+)
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import (
     bootstrap_langgraph_schema,
@@ -122,5 +125,8 @@ app.include_router(admin_router, dependencies=[Depends(require_admin_session)])
 app.include_router(comments_router, dependencies=[Depends(require_admin_session)])
 app.include_router(publishing_router, dependencies=[Depends(require_admin_session)])
 app.include_router(marketing_router, dependencies=[Depends(require_admin_session)])
+app.include_router(
+    whatsapp_notify_router, dependencies=[Depends(require_admin_session)]
+)
 # Sem login: a Meta baixa daqui a mídia das publicações (token aleatório)
 app.include_router(media_public_router)

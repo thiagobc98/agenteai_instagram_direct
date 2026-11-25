@@ -14,6 +14,7 @@ import {
   IconLogout,
   IconMenu,
   IconPublish,
+  IconQr,
   IconTrendUp,
   IconX,
 } from "./icons";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: "/posts", label: "Postagens", icon: IconGrid },
   { href: "/publish", label: "Publicar", icon: IconPublish },
   { href: "/marketing", label: "Marketing", icon: IconTrendUp },
+  { href: "/whatsapp", label: "WhatsApp", icon: IconQr },
   { href: "/agents", label: "Agentes", icon: IconAgents },
 ];
 

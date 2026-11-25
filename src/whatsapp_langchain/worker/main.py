@@ -27,6 +27,7 @@ from whatsapp_langchain.worker.contacts import (
     ensure_contact_profile,
 )
 from whatsapp_langchain.worker.instagram_client import InstagramClient
+from whatsapp_langchain.worker.notifier import notification_loop
 from whatsapp_langchain.worker.processor import process_message
 from whatsapp_langchain.worker.publisher import publish_next
 
@@ -83,6 +84,9 @@ async def main() -> None:
     # Contatos que conversaram antes do painel mostrar o @username
     await backfill_contact_profiles(pool, instagram)
 
+    # Avisos no WhatsApp do atendente: tarefa própria, fora do atendimento
+    notifier = asyncio.create_task(notification_loop(pool))
+
     try:
         while True:
             message = await claim_next_message(pool, settings.lease_seconds)
@@ -120,6 +124,7 @@ async def main() -> None:
     except KeyboardInterrupt:
         logger.info("worker_interrupted")
     finally:
+        notifier.cancel()
         if store_stack is not None:
             await store_stack.aclose()
         await checkpointer_stack.aclose()

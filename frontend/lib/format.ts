@@ -155,3 +155,11 @@ export function whatsappLink(whatsapp: string | null): string | null {
 export function formatWhatsapp(whatsapp: string | null): string | null {
   return whatsapp ? formatContactId(`+${whatsapp}`) : null;
 }
+
+/** Celular em dígitos para exibição: 5531983181760 -> +55 31 98318-1760 */
+export function formatPhone(digits: string | null): string {
+  if (!digits) return "";
+  const d = digits.replace(/\D/g, "");
+  const m = d.match(/^55(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : `+${d}`;
+}

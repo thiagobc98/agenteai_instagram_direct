@@ -80,6 +80,24 @@ Recomendadas para operação:
 
 Veja `.env.example` para a lista completa.
 
+### Avisos no WhatsApp do atendente (Wuzapi)
+
+A cada mensagem nova no Direct, um número de WhatsApp conectado pelo QR Code
+(tela **WhatsApp** do painel) manda um aviso ao celular do atendente. Opcional:
+sem as variáveis abaixo, os avisos ficam desligados e o resto funciona normal.
+
+- Serviço `wuzapi` (imagem `asternic/wuzapi:1.1.0`, já no `docker-compose.yml`),
+  com volume persistente em `/data`. **No Railway**: crie um serviço a partir da
+  imagem, com Volume em `/data`, e aponte `WUZAPI_API_URL` da api e do worker
+  para o endereço interno dele (`http://<serviço>.railway.internal:8080`).
+- `WUZAPI_TOKEN`, `WUZAPI_ADMIN_TOKEN` (api e worker) e
+  `WUZAPI_GLOBAL_ENCRYPTION_KEY` (no serviço do Wuzapi). Guarde a chave de
+  criptografia fora do servidor: sem ela, a sessão se perde e pede QR Code de novo.
+- O Wuzapi não precisa de porta pública: só a api e o worker falam com ele.
+- Depois do deploy: painel → **WhatsApp** → Conectar → ler o QR Code com o
+  celular que vai **enviar** os avisos (não o do atendente) → cadastrar o
+  celular do atendente → **Enviar teste**.
+
 ## Ordem de subida
 
 1. Registrar o DNS (`DOMAIN` → IP da VPS) antes do primeiro start —
