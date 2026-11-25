@@ -202,7 +202,7 @@ class TestSignatureValidationOnPost:
         mock_enqueue.return_value = EnqueueResult(message_id=1, is_buffered=False)
         response = post_signed(TEXT_PAYLOAD)
         assert response.status_code == 200
-        assert response.json() == {"received": True, "enqueued": 1}
+        assert response.json() == {"received": True, "enqueued": 1, "comments": 0}
 
     @patch(f"{ROUTE}.enqueue_or_buffer")
     def test_rejects_wrong_signature(self, mock_enqueue):
@@ -286,7 +286,7 @@ class TestPostFlow:
         mock_enqueue.return_value = EnqueueResult(message_id=1, is_buffered=False)
         payload = _payload({"mid": "A", "text": "um"}, {"mid": "B", "text": "dois"})
         response = post_signed(payload)
-        assert response.json() == {"received": True, "enqueued": 2}
+        assert response.json() == {"received": True, "enqueued": 2, "comments": 0}
         assert mock_enqueue.call_count == 2
 
     @patch(f"{ROUTE}.enqueue_or_buffer")
@@ -298,7 +298,7 @@ class TestPostFlow:
         response = post_signed(payload)
 
         assert response.status_code == 200
-        assert response.json() == {"received": True, "enqueued": 1}
+        assert response.json() == {"received": True, "enqueued": 1, "comments": 0}
         assert mock_enqueue.call_count == 1
 
     def test_rejects_unknown_agent(self):

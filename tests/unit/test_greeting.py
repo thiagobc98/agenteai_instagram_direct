@@ -123,6 +123,17 @@ class TestFirstTurn:
 
         assert f'"Boa tarde, @_thibec! {INTRO}, seja bem-vinda.' in text
 
+    def test_greeting_only_asks_how_to_help(self):
+        text = prompt(15, first=True, last="Bom dia!")
+        assert "Como posso te ajudar hoje?" in text
+
+    def test_first_message_with_a_question_answers_it_right_away(self):
+        text = prompt(15, first=True, last="Oi! Tem no 36?")
+
+        assert f'"Boa tarde! {INTRO}, seja bem-vinda 😊"' in text
+        assert "responda ao que ela pediu" in text
+        assert "Como posso te ajudar hoje?" not in text
+
     def test_has_no_clinic_leftovers(self):
         text = build_greeting_prompt(
             BASE, GREETING_INTRO, at(9), is_first_turn=True, last_message="Oi"
@@ -226,3 +237,56 @@ class TestWhatsappAskCount:
 
     def test_empty_history_has_zero_asks(self):
         assert _whatsapp_ask_count([]) == 0
+
+
+class TestCameFromComment:
+    """Cliente respondendo no Direct a mensagem privada de um comentário."""
+
+    CONTEXT = {
+        "comment_text": "tem no 36?",
+        "private_text": "Oi! Aqui é a Juliana 😊 Me passa seu WhatsApp com DDD?",
+        "post_caption": "Scarpin nude",
+    }
+
+    def build(self, *, first: bool, context: dict | None = None, asks: int = 0):
+        return build_greeting_prompt(
+            BASE,
+            INTRO,
+            at(15),
+            is_first_turn=first,
+            last_message="31999998888",
+            comment_context=context,
+            whatsapp_ask_count=asks,
+        )
+
+    def test_first_turn_continues_instead_of_introducing_again(self):
+        text = self.build(first=True, context=self.CONTEXT)
+
+        assert "NÃO se apresente de novo" in text
+        assert "seja bem-vinda. Como posso" not in text
+
+    def test_context_section_has_comment_and_sent_message(self):
+        text = self.build(first=True, context=self.CONTEXT)
+
+        assert "## Esta cliente veio de um comentário" in text
+        assert '"tem no 36?"' in text
+        assert "Me passa seu WhatsApp" in text
+        assert "Scarpin nude" in text
+        # Contexto antes das instruções de WhatsApp (que decidem o que fazer)
+        assert text.index("veio de um comentário") < text.index(
+            "## WhatsApp da cliente"
+        )
+
+    def test_whatsapp_asked_in_private_message_counts_as_an_ask(self):
+        # 1 pedido no Direct + 1 na mensagem do comentário = desiste
+        text = self.build(first=False, context=self.CONTEXT, asks=1)
+        assert "NÃO peça de novo" in text
+
+    def test_without_context_nothing_changes(self):
+        assert "veio de um comentário" not in self.build(first=True)
+        assert "seja bem-vinda" in self.build(first=True)
+
+    def test_third_party_text_is_clipped(self):
+        long = {**self.CONTEXT, "comment_text": "x" * 5000}
+        text = self.build(first=False, context=long)
+        assert "x" * 301 not in text

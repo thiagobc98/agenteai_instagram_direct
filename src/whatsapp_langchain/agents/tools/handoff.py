@@ -49,4 +49,7 @@ async def save_customer_whatsapp(
     pool = await get_pool()
     await set_customer_whatsapp(pool, user_id, whatsapp=normalized)
     logger.info("customer_whatsapp_saved", external_id=user_id)
-    return "WhatsApp salvo. Agora você já pode passar o contato da Patrícia."
+    return (
+        "WhatsApp salvo. Confirme para a cliente que a Patrícia vai chamar ela "
+        "no WhatsApp em breve. Não peça o número de novo."
+    )

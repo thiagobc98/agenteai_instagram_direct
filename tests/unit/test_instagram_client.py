@@ -15,6 +15,7 @@ from whatsapp_langchain.worker.instagram_client import (
     InstagramClient,
     InstagramSendError,
     is_within_messaging_window,
+    split_bubbles,
     split_message,
     to_plain_text,
 )
@@ -287,6 +288,63 @@ class TestSplitMessage:
 
     def test_custom_limit(self):
         assert split_message("um dois três", limit=8) == ["um dois", "três"]
+
+
+class TestSplitBubbles:
+    HANDOFF = (
+        "Quem confirma o valor certinho é a Patrícia 😊\n\n"
+        "Me passa seu WhatsApp com DDD que ela te chama por lá!\n\n"
+        "Se preferir, pode chamar ela direto: https://wa.me/5531993456562"
+    )
+
+    def test_each_paragraph_is_a_bubble(self):
+        assert split_bubbles(self.HANDOFF) == [
+            "Quem confirma o valor certinho é a Patrícia 😊",
+            "Me passa seu WhatsApp com DDD que ela te chama por lá!",
+            "Se preferir, pode chamar ela direto: https://wa.me/5531993456562",
+        ]
+
+    def test_single_line_breaks_stay_together(self):
+        text = "Horário:\n- Seg a sex: 9h30 às 18h\n- Sábado: 9h30 às 13h"
+        assert split_bubbles(text) == [text]
+
+    def test_blank_lines_with_spaces_also_split(self):
+        assert split_bubbles("Oi!\n  \n\nTudo bem?") == ["Oi!", "Tudo bem?"]
+
+    def test_extra_paragraphs_go_together_in_the_last_bubble(self):
+        text = "\n\n".join(f"p{i}" for i in range(6))
+        assert split_bubbles(text, max_bubbles=4) == [
+            "p0",
+            "p1",
+            "p2",
+            "p3\n\np4\n\np5",
+        ]
+
+    def test_long_paragraph_still_respects_byte_limit(self):
+        parts = split_bubbles("curto\n\n" + "á " * 800)
+        assert parts[0] == "curto"
+        assert all(len(p.encode("utf-8")) <= MAX_MESSAGE_BYTES for p in parts)
+
+    def test_empty(self):
+        assert split_bubbles("  \n\n ") == []
+
+
+class TestSendBubbles:
+    async def test_sends_one_message_per_paragraph_in_order(self, client, monkeypatch):
+        import whatsapp_langchain.worker.instagram_client as mod
+
+        monkeypatch.setattr(mod, "BUBBLE_PAUSE_SECONDS", 0)
+        sent: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(json.loads(request.content)["message"]["text"])
+            return httpx.Response(200, json={"message_id": f"M{len(sent)}"})
+
+        patch_async_client(monkeypatch, httpx.MockTransport(handler))
+        last_id = await client.send_message(IGSID, TestSplitBubbles.HANDOFF)
+
+        assert sent == split_bubbles(TestSplitBubbles.HANDOFF)
+        assert last_id == "M3"
 
 
 class TestToPlainText:

@@ -20,6 +20,7 @@ from whatsapp_langchain.shared.db import (
     run_migrations,
 )
 from whatsapp_langchain.shared.observability import setup_logging
+from whatsapp_langchain.worker.comments import draft_next_comment
 from whatsapp_langchain.worker.consumer import claim_next_message
 from whatsapp_langchain.worker.contacts import (
     backfill_contact_profiles,
@@ -27,6 +28,7 @@ from whatsapp_langchain.worker.contacts import (
 )
 from whatsapp_langchain.worker.instagram_client import InstagramClient
 from whatsapp_langchain.worker.processor import process_message
+from whatsapp_langchain.worker.publisher import publish_next
 
 logger = structlog.get_logger()
 
@@ -86,7 +88,22 @@ async def main() -> None:
             message = await claim_next_message(pool, settings.lease_seconds)
 
             if message is None:
-                await asyncio.sleep(settings.poll_interval_seconds)
+                # Fila do Direct vazia: publicações agendadas (têm hora
+                # marcada) e depois rascunhos de resposta a comentários.
+                worked = False
+                try:
+                    worked = await publish_next(pool, instagram)
+                except Exception as exc:
+                    logger.error("publisher_loop_error", error=str(exc))
+                if not worked:
+                    try:
+                        worked = await draft_next_comment(
+                            pool, instagram, lease_seconds=settings.lease_seconds
+                        )
+                    except Exception as exc:
+                        logger.error("comment_draft_loop_error", error=str(exc))
+                if not worked:
+                    await asyncio.sleep(settings.poll_interval_seconds)
                 continue
 
             # Perfil (@username) do cliente para o painel — best-effort

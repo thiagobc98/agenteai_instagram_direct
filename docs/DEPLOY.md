@@ -55,6 +55,16 @@ A API e o worker devem compartilhar:
 - `DOMAIN` — domínio público (DNS A record apontando para a VPS), usado
   pelo Caddy para emitir o certificado TLS
 
+Para a tela **Publicar** (Feed, Story, Reels):
+- `PUBLIC_BASE_URL` — URL pública HTTPS da API (ex: `https://SEU-DOMINIO`).
+  A Meta baixa a mídia de `<PUBLIC_BASE_URL>/media/<token>`, então essa rota
+  precisa estar acessível da internet. O Caddy já roteia `/media/*` para a API.
+- Volume persistente na **API** em `MEDIA_STORAGE_DIR` (`/app/data/media` no
+  Docker). No docker-compose já existe o volume `media_data`. **No Railway,
+  crie um Volume no serviço `api` montado em `/app/data/media`**: sem ele, a
+  mídia some a cada deploy e publicações agendadas falham. O worker não
+  precisa do volume, porque só passa a URL para a Meta.
+
 Recomendadas para operação:
 - `LOG_JSON=true`
 - `SESSION_COOKIE_SECURE=true` (produção — cookie só via HTTPS)
@@ -163,6 +173,11 @@ a stack local, nunca contra produção.
 - portas internas NÃO publicadas (só 80/443 respondem; confira com `nmap` de fora)
 - `INSTAGRAM_ACCESS_TOKEN` de longa duração com renovação planejada (expira; envio falha com `instagram_token_invalid`)
 - app da Meta em modo Live (App Review aprovado) para atender clientes reais
+- token com `instagram_business_manage_comments` (respostas a comentários),
+  `instagram_business_content_publish` (tela Publicar) e
+  `instagram_business_manage_insights` (métricas para o agente de marketing)
+- `curl -I https://SEU-DOMINIO/media/inexistente.jpg` responde 404 (rota
+  pública no ar). Uma publicação de teste em Story chega ao perfil
 - backup agendado no crontab e testado (restore manual)
 - logs estruturados habilitados (`LOG_JSON=true`)
 

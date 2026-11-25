@@ -1,0 +1,262 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.closed {
+  opacity: 0.72;
+}
+
+.postRef {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.postRef:hover {
+  background: var(--primary-light);
+}
+
+.postThumb {
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.postCaption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.who {
+  flex: 1;
+  min-width: 0;
+}
+
+.author {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.author a {
+  color: var(--text-primary);
+}
+
+.author a:hover {
+  color: var(--primary);
+}
+
+.replyTag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--text-tertiary);
+}
+
+.time {
+  margin: 0.05rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.success {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.warning {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+.danger {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.neutral,
+.muted {
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+}
+
+.text {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.drafting {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.drafts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.suggestIgnore {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.83rem;
+  color: var(--warning);
+  background: var(--warning-light);
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.fieldLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.fieldLabel small {
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin-left: 0.35rem;
+}
+
+.field textarea {
+  width: 100%;
+  resize: vertical;
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+.hint {
+  align-self: flex-end;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+}
+
+.secondary,
+.secondary:hover:not(:disabled) {
+  background: var(--gold-light);
+  color: #7a5a2a;
+}
+
+.secondary:hover:not(:disabled) {
+  filter: brightness(0.96);
+}
+
+.ghost,
+.ghost:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--surface-alt);
+}
+
+.errorBox {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--danger);
+  background: var(--danger-light);
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+}
+
+.replies {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.7rem;
+}
+
+.reply {
+  border-left: 3px solid var(--primary);
+  padding: 0.1rem 0 0.1rem 0.7rem;
+}
+
+.reply p {
+  margin: 0.15rem 0 0;
+  font-size: 0.88rem;
+  white-space: pre-wrap;
+}
+
+.replyLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}

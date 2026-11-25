@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Proxy same-origin para /api, /webhook e /health -> API FastAPI.
+// Proxy same-origin para /api, /webhook, /media e /health -> API FastAPI.
 //
 // Usa Middleware (não next.config.js rewrites) porque rewrites() é
 // resolvido em build time — o valor de API_PROXY_TARGET definido no
@@ -17,5 +17,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/webhook/:path*", "/health"],
+  matcher: ["/api/:path*", "/webhook/:path*", "/media/:path*", "/health"],
 };

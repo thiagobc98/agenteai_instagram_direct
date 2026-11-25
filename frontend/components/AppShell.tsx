@@ -10,8 +10,11 @@ import {
   IconAgents,
   IconChats,
   IconDashboard,
+  IconGrid,
   IconLogout,
   IconMenu,
+  IconPublish,
+  IconTrendUp,
   IconX,
 } from "./icons";
 import styles from "./AppShell.module.css";
@@ -19,6 +22,9 @@ import styles from "./AppShell.module.css";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: IconDashboard },
   { href: "/chats", label: "Conversas", icon: IconChats },
+  { href: "/posts", label: "Postagens", icon: IconGrid },
+  { href: "/publish", label: "Publicar", icon: IconPublish },
+  { href: "/marketing", label: "Marketing", icon: IconTrendUp },
   { href: "/agents", label: "Agentes", icon: IconAgents },
 ];
 

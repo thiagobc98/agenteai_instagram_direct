@@ -33,6 +33,8 @@ from langgraph.store.base import BaseStore
 from psycopg_pool import AsyncConnectionPool
 
 from whatsapp_langchain.agents.loader import load_graph
+from whatsapp_langchain.agents.middleware.handoff_context import expand_patricia_link
+from whatsapp_langchain.shared.comments import recent_private_reply
 from whatsapp_langchain.shared.contacts import (
     get_contact_username,
     get_customer_whatsapp,
@@ -173,6 +175,28 @@ async def process_message(
             )
             customer_whatsapp = None
 
+        # Cliente que chegou por um comentário: o agente continua o assunto da
+        # mensagem privada já enviada (ver shared/comments.py). Best-effort.
+        try:
+            origin = await recent_private_reply(pool, message.external_id)
+        except Exception as origin_err:
+            logger.warning(
+                "comment_context_lookup_failed",
+                message_id=message.id,
+                external_id=message.external_id,
+                error=str(origin_err),
+            )
+            origin = None
+        comment_context = (
+            {
+                "comment_text": origin.comment_text,
+                "private_text": origin.private_text,
+                "post_caption": origin.post_caption,
+            }
+            if origin
+            else None
+        )
+
         graph = load_graph(
             message.agent_id,
             checkpointer=checkpointer,
@@ -183,12 +207,17 @@ async def process_message(
                 "messages": [human_message],
                 "username": username,
                 "customer_whatsapp": customer_whatsapp,
+                "comment_context": comment_context,
             },
             config=invoke_config,
         )
 
         # 4. Extrair resposta
         response_text = result["messages"][-1].content
+        # Link da Patrícia sai sempre completo (com a mensagem pronta), mesmo
+        # que o modelo tenha escrito só o link curto
+        if isinstance(response_text, str):
+            response_text = expand_patricia_link(response_text)
 
         # 5. Enviar resposta via Instagram (obrigatório antes de mark_done)
         await instagram.send_message(message.external_id, response_text)

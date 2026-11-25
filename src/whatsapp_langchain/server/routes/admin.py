@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query
 
 from whatsapp_langchain.agents.loader import list_agents
 from whatsapp_langchain.shared.analytics import build_dashboard
+from whatsapp_langchain.shared.comments import list_private_replies
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
 from whatsapp_langchain.shared.google_calendar import (
@@ -138,6 +139,14 @@ async def get_chat_messages(
         )
         contact = await cursor.fetchone()
 
+    # Mensagens privadas enviadas pela tela de comentários (fora da fila do
+    # Direct): entram na linha do tempo da conversa. Best-effort.
+    try:
+        comment_replies = await list_private_replies(pool, external_id)
+    except Exception as exc:
+        logger.warning("chat_comment_replies_failed", error=str(exc))
+        comment_replies = []
+
     messages = [
         {
             "id": row[0],
@@ -163,6 +172,7 @@ async def get_chat_messages(
         "profile_pic_url": contact[2] if contact else None,
         "whatsapp": contact[3] if contact else None,
         "messages": messages,
+        "comment_replies": comment_replies,
     }
 
 

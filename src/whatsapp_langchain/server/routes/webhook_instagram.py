@@ -30,8 +30,12 @@ from whatsapp_langchain.server.dependencies import (
     check_rate_limit,
     validate_instagram_signature,
 )
+from whatsapp_langchain.shared.comments import insert_comment
 from whatsapp_langchain.shared.config import settings
 from whatsapp_langchain.shared.db import get_pool
+from whatsapp_langchain.shared.instagram_comments_payload import (
+    parse_instagram_comments,
+)
 from whatsapp_langchain.shared.instagram_payload import parse_instagram_messages
 from whatsapp_langchain.shared.queue import enqueue_or_buffer
 
@@ -118,11 +122,43 @@ async def webhook_instagram(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid JSON body") from None
 
+    comments = parse_instagram_comments(
+        payload, business_account_id=settings.instagram_business_account_id
+    )
     messages = parse_instagram_messages(payload)
-    if not messages:
+    if not messages and not comments:
         return {"ignored": True}
 
     pool = await get_pool()
+
+    # Comentários em postagens: gravados para o Worker gerar o rascunho de
+    # resposta (aprovado depois no painel). Os da própria conta (inclusive
+    # as respostas publicadas pelo painel) ficam registrados como `ignored`.
+    comments_saved = 0
+    for comment in comments:
+        created = await insert_comment(
+            pool,
+            comment_id=comment.comment_id,
+            media_id=comment.media_id,
+            text=comment.text,
+            from_id=comment.from_id,
+            from_username=comment.from_username,
+            parent_id=comment.parent_id,
+            commented_at=comment.commented_at,
+            status="ignored" if comment.is_own else "new",
+        )
+        comments_saved += int(created)
+        logger.info(
+            "webhook_instagram_comment_received",
+            comment_id=comment.comment_id,
+            media_id=comment.media_id,
+            is_own=comment.is_own,
+            duplicate=not created,
+        )
+
+    if not messages:
+        return {"received": True, "enqueued": 0, "comments": comments_saved}
+
     enqueued = 0
 
     for parsed in messages:
@@ -164,4 +200,4 @@ async def webhook_instagram(
             buffered=result.is_buffered,
         )
 
-    return {"received": True, "enqueued": enqueued}
+    return {"received": True, "enqueued": enqueued, "comments": comments_saved}

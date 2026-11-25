@@ -48,6 +48,10 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/whatsapp_langchain
       REDIS_URL: redis://redis:6379/0
       LOG_JSON: "true"
+      MEDIA_STORAGE_DIR: /app/data/media
+    # Mídia das publicações (a Meta baixa daqui via /media/<token>)
+    volumes:
+      - media_data:/app/data/media
     depends_on:
       db:
         condition: service_healthy
@@ -85,3 +89,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

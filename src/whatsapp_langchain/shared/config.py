@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     # graph.facebook.com (Facebook Login com Página vinculada).
     instagram_graph_base_url: str = "https://graph.instagram.com"
 
+    # --- Publicação (Feed, Story, Reels) ---
+    # URL pública HTTPS por onde a Meta baixa a mídia enviada pelo painel
+    # (ex: https://seu-dominio ou o túnel ngrok em dev). Sem ela, ou com
+    # localhost, a publicação falha com aviso claro: a Meta não alcança.
+    public_base_url: str = ""
+    # Pasta onde a API guarda a mídia enviada pelo painel até publicar.
+    media_storage_dir: str = "data/media"
+    # Teto de upload por arquivo (Reels aceita até 300 MB na Meta).
+    media_max_upload_mb: int = 300
+
     # --- Rate Limit ---
     rate_limit_per_hour: int = 30
 

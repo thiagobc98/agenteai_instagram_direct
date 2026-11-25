@@ -97,6 +97,12 @@ Para receber e responder mensagens:
 
 - `instagram_business_basic`
 - `instagram_business_manage_messages`
+- `instagram_business_manage_comments` (respostas a comentários, ver
+  [seção 10.1](#101-respostas-a-comentários-das-postagens))
+- `instagram_business_content_publish` (tela Publicar, ver
+  [seção 10.2](#102-publicação-feed-story-e-reels))
+- `instagram_business_manage_insights` (métricas dos posts para o agente de
+  marketing, ver [seção 10.3](#103-agente-de-marketing))
 
 (No Facebook Login: `instagram_basic` e `instagram_manage_messages`, além das
 permissões de Página exigidas pela doc.)
@@ -169,7 +175,8 @@ texto puro se o token confere (senão `403`) — só então o painel aceita a UR
 
 Depois, **assine o campo `messages`** (os campos `messaging_seen`,
 `message_reactions` e `messaging_postbacks` não são necessários; se assinados,
-são ignorados).
+são ignorados). Para as respostas a comentários, **assine também o campo
+`comments`**, na mesma URL de callback.
 
 A Meta assina cada `POST` com o **App Secret**: header
 `X-Hub-Signature-256: sha256=<HMAC-SHA256 do body bruto>`. O projeto recalcula
@@ -326,6 +333,149 @@ Todo erro de envio levanta `InstagramSendError` e cai no retry padrão da fila
   `extendedProperties.private.external_id`. Eventos criados antes da migração
   (com `phone`) continuam aparecendo no painel, mas **não** são encontrados
   pelas tools do agente.
+
+### 10.1 Respostas a comentários das postagens
+
+Tela **Postagens** do painel. Fluxo:
+
+1. Alguém comenta numa postagem. A Meta manda o evento `comments` para o
+   mesmo `/webhook/instagram`, e o comentário é gravado em `ig_comments`
+   (migration `009_instagram_comments.sql`) com status `new`.
+2. O Worker, quando a fila do Direct está vazia, gera o rascunho com
+   [`agents/comments/`](../src/whatsapp_langchain/agents/comments/): uma
+   resposta **pública** curta, uma mensagem **privada** para o Direct (vazia
+   quando não faz sentido) e uma sugestão de **ignorar** (spam, ofensa,
+   tentativa de manipular a IA). Se falhar, tenta de novo com backoff
+   (30s, 2min) e desiste na 3ª tentativa (status `failed`, botão "Refazer com IA").
+3. **Nada é publicado sem aprovação.** No painel, alguém edita e aprova. A
+   pública é publicada com `POST /{comment_id}/replies` e a privada com
+   `POST /me/messages` usando `recipient.comment_id`. O usuário que aprovou
+   fica gravado em `approved_by`.
+4. Se a pessoa responder a mensagem privada, a conversa segue no Direct com
+   a secretária, como qualquer outra.
+
+Regras da Meta que o código respeita:
+
+- **Resposta privada:** uma só por comentário, em até **7 dias**, até 1000
+  bytes e sem dividir em partes. Se ela falhar, a pública continua publicada
+  e o erro aparece no card.
+- **Comentário:** até 2200 caracteres.
+- Comentários da própria conta (inclusive as respostas publicadas pelo
+  painel) chegam pelo webhook e são gravados como `ignored`.
+- **Sincronizar** (botão no painel, `POST /api/posts/sync`) importa as 25
+  postagens mais recentes e seus comentários. Só os dos últimos 7 dias, ainda
+  sem resposta da conta, entram para rascunho. Os mais antigos ficam como
+  `archived`, e dá para reabri-los com "Responder mesmo assim".
+
+Teste local sem a Meta:
+
+```bash
+python scripts/simulate_instagram_webhook.py "Tem no 36?" --comment-on MEDIA_TESTE --url http://localhost:8000
+```
+
+Antes de trocar o modelo (`OPENROUTER_MODEL`) ou mexer no prompt, rode a
+avaliação. Ela passa por casos de preço, numeração, elogio, reclamação, spam
+e prompt injection, e confere as regras (sem preço ou telefone em público,
+sem promessa de desconto, limites de tamanho, spam sugerido como ignorar):
+
+```bash
+uv run --extra dev python scripts/eval_comment_drafts.py --repeat 3
+```
+
+### 10.2 Publicação (Feed, Story e Reels)
+
+Tela **Publicar** do painel. Fluxo:
+
+1. **Novo Feed / Story / Reels** cria um rascunho. Suba a mídia (arrastar e
+   soltar, com barra de progresso). Imagens são convertidas para JPEG (o feed
+   só aceita JPEG), com a rotação do celular aplicada, e reduzidas a 1440 px.
+   Vídeo vai como está (MP4/MOV).
+2. **Gerar legenda com IA** (Feed e Reels):
+   [`agents/captions/`](../src/whatsapp_langchain/agents/captions/) descreve
+   cada foto com o modelo de visão (`OPENROUTER_MIDIA_MODEL`), guarda a
+   descrição e escreve legenda e hashtags com o modelo principal, a partir do
+   briefing. Ela nunca inventa preço, desconto ou numeração fora do briefing.
+3. O painel confere **as regras da Meta antes de aprovar**: proporção (feed de
+   4:5 a 1,91:1), quantidade (carrossel até 10, Reels com 1 vídeo, Story com
+   1 mídia), duração (Reels de 3s a 15min, Story até 60s), 2200 caracteres, 30
+   hashtags e 20 menções.
+4. **Aprovar e publicar agora** ou **Aprovar e agendar** (até 75 dias). Fica
+   registrado quem aprovou.
+5. O Worker publica em etapas, sem travar a fila do Direct
+   ([`worker/publisher.py`](../src/whatsapp_langchain/worker/publisher.py)):
+   cria o container (a Meta baixa a mídia de `PUBLIC_BASE_URL/media/...`),
+   acompanha o processamento do vídeo e chama `media_publish`.
+
+Garantias:
+
+- **Não publica em dobro.** Se o processo cair ou a rede falhar depois do
+  `media_publish`, o Worker consulta o container antes de tentar de novo. Se
+  a Meta já marcou `PUBLISHED`, só registra.
+- **Cota da Meta** (100 publicações via API a cada 24h): conferida antes de
+  publicar. Se estiver esgotada, a publicação é adiada 1h, com o aviso no
+  painel.
+- **Falhas de rede, 5xx ou rate limit:** novas tentativas com backoff (até 5).
+  Token inválido, permissão faltando ou mídia recusada viram `failed` na hora,
+  com a mensagem da Meta. Dá para corrigir e reagendar.
+- A rota `/media/<token>` é pública porque a Meta não faz login, mas o token
+  tem 192 bits aleatórios e é validado contra path traversal.
+
+Limitações da API da Meta (não do projeto): Story não aceita legenda,
+figurinhas, links nem música (o texto precisa estar na arte). Reels não
+recebem música da biblioteca. Não é possível marcar produtos nem pessoas.
+
+**Teste local:** a Meta precisa alcançar a mídia, então rode um túnel para a
+API (`ngrok http 8001`) e configure `PUBLIC_BASE_URL=https://<túnel>`.
+
+**Avaliação da IA** (antes de trocar o modelo ou mexer no prompt):
+
+```bash
+uv run --extra dev python scripts/eval_captions.py --repeat 3
+```
+
+### 10.3 Agente de marketing
+
+Tela **Marketing** do painel: um chat da equipe com uma estrategista de
+conteúdo e crescimento, focada em trazer clientes para a loja física e para
+o Direct. Fica em [`agents/marketing/`](../src/whatsapp_langchain/agents/marketing/),
+**fora do catálogo** de agentes de atendimento, para que nenhum webhook de
+cliente consiga acioná-la.
+
+Ela trabalha com dados reais, por ferramentas:
+
+| Ferramenta | Fonte |
+|---|---|
+| `ver_desempenho_dos_posts` | Graph API: posts recentes e métricas (alcance, salvamentos, compartilhamentos), com médias por formato e por horário calculadas em Python |
+| `ver_perfil_da_conta` | Graph API: seguidores e total de posts |
+| `ver_demanda_das_clientes` | Banco: assuntos mais perguntados no Direct, horários de pico, leads e comentários recentes (mesma base do Dashboard) |
+| `ver_calendario_de_conteudo` | Banco: publicações feitas, agendadas e rascunhos da tela Publicar |
+| `ver_datas_comerciais` | Código: calendário do varejo (Dia das Mães, Black Friday...), com a antecedência para começar a campanha |
+| `criar_rascunho_de_post` | Cria um rascunho na tela Publicar, com briefing de produção, legenda, data sugerida e justificativa |
+
+Decisões de engenharia:
+
+- **Nada vai ao ar sem a equipe.** O agente só cria rascunhos (no máximo 10
+  por resposta). A mídia, a revisão e a aprovação ficam na tela Publicar, que
+  mostra a justificativa e já preenche o horário sugerido.
+- **Não inventa números.** O prompt exige que todo número venha de uma
+  ferramenta, e as contas (médias, taxas, melhor horário) são feitas em
+  Python. Se faltar permissão ou o token estiver expirado, a ferramenta diz
+  isso explicitamente e o agente avisa que está dando recomendação geral.
+- **Trava contra preço inventado** no próprio `criar_rascunho_de_post`.
+- **Datas calculadas por código**, e "hoje" é injetado no prompt a cada
+  pergunta (modelos erram datas móveis e não sabem a data atual).
+- **Contexto limitado:** cada pergunta envia só as últimas 12 mensagens da
+  conversa, e os dados são consultados de novo. Há timeout de 150s e uma
+  pergunta por vez em cada conversa.
+
+**Avaliação** (antes de trocar o modelo ou mexer no prompt): roda o agente
+real contra dados fixos e confere que ele usa as ferramentas, não inventa
+números, monta o plano semanal com rascunhos válidos, admite quando faltam
+métricas e não inventa preço.
+
+```bash
+uv run --extra dev python scripts/eval_marketing_agent.py --repeat 3
+```
 
 ## 11. Solução de problemas
 

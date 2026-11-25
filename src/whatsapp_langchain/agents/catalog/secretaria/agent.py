@@ -67,6 +67,9 @@ class SecretariaState(AgentState):
 
     username: NotRequired[str | None]
     customer_whatsapp: NotRequired[str | None]
+    # Comentário que trouxe a cliente ao Direct + mensagem privada já enviada
+    # (dict simples, serializável no checkpoint). Ver shared/comments.py.
+    comment_context: NotRequired[dict | None]
 
 
 def build_graph(

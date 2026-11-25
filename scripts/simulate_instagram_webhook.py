@@ -10,6 +10,7 @@ Uso:
     python scripts/simulate_instagram_webhook.py "Oi" --external-id 17841400000000002
     python scripts/simulate_instagram_webhook.py "" --image-url https://exemplo.com/foto.jpg
     python scripts/simulate_instagram_webhook.py "Oi" --url https://meu-tunel.ngrok.app
+    python scripts/simulate_instagram_webhook.py "Tem no 36?" --comment-on <media_id>
 
 Atenção: o Worker vai tentar RESPONDER de verdade ao --external-id informado.
 Com um ID fictício o envio falha (a mensagem entra no fluxo de retry); use o ID
@@ -71,6 +72,30 @@ def build_payload(
     }
 
 
+def build_comment_payload(external_id: str, text: str, media_id: str) -> dict:
+    """Evento do campo `comments` (comentário numa postagem)."""
+    return {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": BUSINESS_ACCOUNT_ID,
+                "time": int(time.time()),
+                "changes": [
+                    {
+                        "field": "comments",
+                        "value": {
+                            "id": f"SIMC{uuid.uuid4().hex[:12]}",
+                            "text": text,
+                            "from": {"id": external_id, "username": "cliente_teste"},
+                            "media": {"id": media_id, "media_product_type": "FEED"},
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
 def sign(raw_body: bytes, app_secret: str) -> str:
     digest = hmac.new(app_secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return f"sha256={digest}"
@@ -84,6 +109,11 @@ def main() -> int:
     parser.add_argument("--url", default="http://localhost:8000", help="Base da API")
     parser.add_argument("--image-url", help="URL https de uma imagem (attachment)")
     parser.add_argument("--audio-url", help="URL https de um áudio (attachment)")
+    parser.add_argument(
+        "--comment-on",
+        metavar="MEDIA_ID",
+        help="Simula um COMENTÁRIO nesta postagem (em vez de mensagem no Direct)",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -92,7 +122,12 @@ def main() -> int:
         print("INSTAGRAM_APP_SECRET não definido (.env ou ambiente).", file=sys.stderr)
         return 1
 
-    payload = build_payload(args.external_id, args.text, args.image_url, args.audio_url)
+    if args.comment_on:
+        payload = build_comment_payload(args.external_id, args.text, args.comment_on)
+    else:
+        payload = build_payload(
+            args.external_id, args.text, args.image_url, args.audio_url
+        )
     raw = json.dumps(payload).encode()
 
     response = httpx.post(

@@ -249,3 +249,70 @@ export const IconTrendUp = (p: IconProps = {}) =>
     </>,
     p,
   );
+
+export const IconGrid = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.3" cy="6.7" r="0.6" fill="currentColor" />
+    </>,
+    p,
+  );
+
+export const IconSparkle = (p: IconProps = {}) =>
+  base(
+    <path d="M12 3.5 13.8 9a2 2 0 0 0 1.2 1.2l5.5 1.8-5.5 1.8a2 2 0 0 0-1.2 1.2L12 20.5 10.2 15A2 2 0 0 0 9 13.8L3.5 12 9 10.2A2 2 0 0 0 10.2 9z" />,
+    p,
+  );
+
+export const IconExternal = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M14 4h6v6" />
+      <path d="M20 4 10 14" />
+      <path d="M19 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" />
+    </>,
+    p,
+  );
+
+export const IconPublish = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M12 8v8" />
+      <path d="M8 12h8" />
+    </>,
+    p,
+  );
+
+export const IconUpload = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M12 16V4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+    </>,
+    p,
+  );
+
+export const IconTrash = (p: IconProps = {}) =>
+  base(
+    <>
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M9 7V4h6v3" />
+    </>,
+    p,
+  );
+
+export const IconVideo = (p: IconProps = {}) =>
+  base(
+    <>
+      <rect x="3" y="6" width="13" height="12" rx="2" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </>,
+    p,
+  );

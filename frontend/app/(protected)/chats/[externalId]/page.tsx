@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, type ChatMessage } from "../../../../lib/api";
+import { api, type ChatMessage, type CommentDmReply } from "../../../../lib/api";
 import { useChats } from "../../../../components/conversations/ChatsContext";
 import ConversationHeader from "../../../../components/conversations/ConversationHeader";
 import MessageList from "../../../../components/conversations/MessageList";
@@ -19,6 +19,7 @@ export default function ChatDetailPage() {
   const { findChat } = useChats();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [commentReplies, setCommentReplies] = useState<CommentDmReply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function ChatDetailPage() {
         .then((data) => {
           if (!cancelled) {
             setMessages(data.messages);
+            setCommentReplies(data.comment_replies ?? []);
             setError(null);
           }
         })
@@ -67,7 +69,7 @@ export default function ChatDetailPage() {
 
         {error && <p className="error-text" style={{ padding: "0.6rem 1.1rem" }}>{error}</p>}
 
-        {loading ? <MessagesSkeleton /> : <MessageList messages={messages} />}
+        {loading ? <MessagesSkeleton /> : <MessageList messages={messages} commentReplies={commentReplies} />}
 
         <MessageInput />
       </div>
